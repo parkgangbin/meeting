@@ -1,0 +1,2128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>회의 답변 어시스턴트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#E8EDF1;--surface:#F2F5F7;--panel:#FFFFFF;--ink:#15212B;--muted:#56636F;--faint:#8794A1;--line:#CAD3DB;--line-strong:#97A5B2;
+  --marker:#FFE15A;--marker-soft:#FFF0A6;--hl-ink:#15212B;--hl-h:100%;
+  --live:#C9433A;--on-live:#FFFFFF;--accent:#1D5B78;--warn:#8A5300;--scrim:rgba(14,22,30,.42);
+  --scale:1;
+  --font:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Noto Sans CJK KR",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111C26;--surface:#15222E;--panel:#1A2938;--ink:#ECEFEA;--muted:#9AA7B2;--faint:#6E7D8A;--line:#2A3A49;--line-strong:#4C6072;
+    --marker:#EED04C;--marker-soft:rgba(238,208,76,.2);--hl-ink:#F2D75A;--hl-h:.14em;
+    --live:#F0675C;--on-live:#111C26;--accent:#8CCBE3;--warn:#E8B04A;--scrim:rgba(0,0,0,.52);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111C26;--surface:#15222E;--panel:#1A2938;--ink:#ECEFEA;--muted:#9AA7B2;--faint:#6E7D8A;--line:#2A3A49;--line-strong:#4C6072;
+  --marker:#EED04C;--marker-soft:rgba(238,208,76,.2);--hl-ink:#F2D75A;--hl-h:.14em;
+  --live:#F0675C;--on-live:#111C26;--accent:#8CCBE3;--warn:#E8B04A;--scrim:rgba(0,0,0,.52);
+  color-scheme:dark;
+}
+html{height:100%;background:var(--bg);scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input,label.btn{font:inherit;color:inherit}
+button,label.btn{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+svg.i{width:20px;height:20px;flex:none}
+
+/* top bar */
+.top{flex:none;display:flex;align-items:center;gap:14px;padding:10px clamp(14px,2.4vw,28px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
+.brand-mark{width:16px;height:10px;border-radius:2px;background:var(--marker);transform:skewX(-14deg)}
+.top-status{flex:1;min-width:0;display:flex;gap:14px;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden}
+.top-status .alert{color:var(--warn)}
+.top-nav{display:flex;gap:2px}
+.tbtn{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:8px;border:1px solid transparent;background:none;font-size:14px;font-weight:500}
+.tbtn:hover{background:var(--surface)}
+.tbtn[aria-expanded="true"]{border-color:var(--line);background:var(--surface)}
+
+/* center cue */
+.stage{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;padding:clamp(16px,3.5vh,44px) clamp(18px,5vw,80px)}
+.cue{margin:auto;width:min(100%,1000px)}
+.cue-q{margin:0 0 .8em;padding-left:.8em;border-left:3px solid var(--line-strong);color:var(--muted);font-size:calc(clamp(16px,1vw + 11px,24px)*var(--scale));line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.cue-q:empty{display:none}
+.cue-a{margin:0;font-size:calc(clamp(26px,2.4vw + 15px,58px)*var(--scale));font-weight:600;line-height:1.36;letter-spacing:-.015em;word-break:keep-all;overflow-wrap:anywhere}
+.cue-a.intro{font-size:calc(clamp(24px,1.9vw + 13px,44px)*var(--scale));letter-spacing:-.02em}
+.cue-a.soft{color:var(--muted);font-weight:500;font-size:calc(clamp(20px,1.3vw + 12px,32px)*var(--scale))}
+.cue-a.streaming::after{content:"";display:inline-block;width:.42em;height:.09em;margin-left:.14em;background:currentColor;vertical-align:.06em;animation:dot 1s infinite}
+.cue-sub{margin:.9em 0 0;max-width:40em;color:var(--muted);font-size:calc(clamp(15px,.5vw + 12px,19px)*var(--scale));line-height:1.65;word-break:keep-all}
+.cue-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:1.4em}
+.cue-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:1.15em;font-size:13.5px;color:var(--muted)}
+.cue-meta:empty{display:none}
+.cue-aux{display:grid;gap:10px;max-width:46em;margin-top:1.2em}
+.cue-aux:empty{display:none}
+.src{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-height:34px;padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font-size:13.5px;text-align:left}
+.src b{font-weight:600}
+.meta-txt{white-space:nowrap}
+.warnline{flex-basis:100%;color:var(--warn);font-size:13.5px;line-height:1.5}
+.linkbtn{padding:6px 2px;border:0;background:none;color:var(--accent);font-size:13.5px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.excerpt{margin:0;padding:10px 14px;border-left:4px solid var(--marker);border-radius:0 8px 8px 0;background:var(--surface);font-size:calc(15.5px*var(--scale));line-height:1.65;white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere;text-align:left;width:100%;border-top:0;border-right:0;border-bottom:0}
+button.excerpt{cursor:pointer}
+.excerpt-src{display:block;margin-bottom:3px;color:var(--muted);font-size:12.5px;white-space:normal}
+.say{padding:12px 16px;border-radius:10px;border:1px dashed var(--line-strong);font-size:calc(18px*var(--scale));line-height:1.6;word-break:keep-all}
+.say-lbl{display:block;margin-bottom:2px;color:var(--muted);font-size:13px}
+.thinking{display:inline-flex;gap:.26em;align-items:center;margin-right:.35em;vertical-align:.12em}
+.thinking i{width:.3em;height:.3em;border-radius:50%;background:currentColor;animation:dot 1.1s infinite}
+.thinking i:nth-child(2){animation-delay:.15s}.thinking i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,100%{opacity:.2}50%{opacity:.85}}
+
+/* highlighter: the one bold move */
+mark.hl{color:var(--hl-ink);background:linear-gradient(var(--marker),var(--marker)) no-repeat 0 100%/100% var(--hl-h);padding:0 .08em;border-radius:.14em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+mark.hl.sweep{animation:hlFull .55s cubic-bezier(.2,.7,.2,1) both}
+@keyframes hlFull{from{background-size:0 100%}to{background-size:100% 100%}}
+@keyframes hlLine{from{background-size:0 .14em}to{background-size:100% .14em}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) mark.hl.sweep{animation-name:hlLine}}
+:root[data-theme="dark"] mark.hl.sweep{animation-name:hlLine}
+mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 .1em}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 18px;border-radius:10px;border:1px solid var(--line-strong);background:var(--panel);font-size:15px;font-weight:500;line-height:1.2;text-align:center}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.small{min-height:38px;padding:0 13px;font-size:13.5px;border-radius:8px}
+.btn.danger{color:var(--live);border-color:var(--live)}
+.btn[disabled]{opacity:.45;cursor:default}
+
+/* control bar */
+.controls{flex:none;display:flex;align-items:center;gap:10px;padding:10px clamp(12px,2vw,24px);border-top:1px solid var(--line);background:var(--surface)}
+.cap,.ask{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px;min-height:64px}
+.ask{display:none}
+.controls.asking .cap{display:none}
+.controls.asking .ask{display:flex}
+.sq{flex:none;width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center}
+.cap-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.cap-state{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.cap-state .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.cap-state.live .dot{background:var(--live)}
+.cap-lines{max-height:70px;overflow-y:auto;font-size:15px;line-height:1.45;scrollbar-width:none}
+.cap-line{display:block;width:100%;margin:0 0 0 -6px;padding:1px 6px;border:0;border-radius:6px;background:none;color:var(--muted);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap-line:last-child{color:var(--ink)}
+.cap-line:hover{background:var(--panel)}
+.cap-interim{display:block;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap-interim:empty{display:none}
+.cap-empty{color:var(--muted);font-size:14px}
+.ask input{flex:1;min-width:0;height:52px;padding:0 14px;border-radius:10px;border:1px solid var(--line-strong);background:var(--panel);font-size:17px}
+.go{flex:none;height:64px;min-width:172px;padding:0 22px;border-radius:14px;border:0;background:var(--marker);color:#15212B;font-size:17px;font-weight:600;line-height:1.22}
+.go:active{transform:translateY(1px)}
+.mic{position:relative;flex:none;width:64px;height:64px;border-radius:50%;border:1.5px solid var(--line-strong);background:var(--panel);display:grid;place-items:center}
+.mic svg{width:26px;height:26px}
+.mic.live{background:var(--live);border-color:var(--live);color:var(--on-live)}
+.mic.live::after{content:"";position:absolute;top:-7px;left:-7px;right:-7px;bottom:-7px;border-radius:50%;border:2px solid var(--live);animation:breathe 2.6s ease-in-out infinite}
+.mic.off{border-style:dashed;color:var(--muted)}
+@keyframes breathe{0%,100%{transform:scale(.93);opacity:.12}50%{transform:scale(1.03);opacity:.45}}
+
+/* materials */
+.mat{flex:none;display:flex;flex-direction:column;height:27%;min-height:150px;max-height:330px;border-top:1px solid var(--line)}
+.mat.closed{height:auto;min-height:0}
+.mat.closed .cards{display:none}
+.mat-bar{flex:none;display:flex;align-items:center;gap:8px;padding:8px clamp(12px,2vw,24px)}
+.tabs{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar,.cards::-webkit-scrollbar,.cap-lines::-webkit-scrollbar{display:none}
+.ftab{flex:none;display:flex;align-items:center;max-width:320px;height:38px;border-radius:8px;border:1px solid var(--line);background:var(--panel)}
+.ftab.on{border-color:var(--ink)}
+.ftab-main{display:flex;align-items:center;gap:8px;min-width:0;height:100%;padding:0 10px 0 12px;border:0;background:none;font-size:13.5px;font-weight:500}
+.ftab .kind{font-size:11px;font-weight:600;color:var(--muted)}
+.ftab .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ftab .st{color:var(--muted);font-size:12px;font-weight:400;white-space:nowrap}
+.ftab .st.busy::before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:var(--accent);vertical-align:1px;animation:dot 1.1s infinite}
+.ftab .st.bad{color:var(--live)}
+.ftab .x{flex:none;height:30px;min-width:30px;margin-right:4px;padding:0 4px;border:0;border-radius:6px;background:none;color:var(--muted);display:grid;place-items:center;font-size:12.5px;font-weight:600}
+.ftab .x.arm{color:var(--live);padding:0 8px}
+.cards{position:relative;flex:1;min-height:0;display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding:2px clamp(12px,2vw,24px) 12px;scroll-snap-type:x proximity}
+.page{flex:0 0 clamp(168px,18vw,236px);display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel);text-align:left;font-size:12.5px;line-height:1.55;overflow:hidden;scroll-snap-align:start}
+.page .loc{flex:none;font-weight:600;font-size:12px;color:var(--muted)}
+.page .tx{flex:1;min-height:0;overflow:hidden;white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+.page.hit{border-color:var(--ink);box-shadow:inset 4px 0 0 var(--marker)}
+.page.hit .loc{color:var(--ink)}
+.page.note{background:none;border-style:dashed;color:var(--muted)}
+.mat-empty{flex:1;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px 12px;margin:0 clamp(12px,2vw,24px) 12px;padding:12px;border:1.5px dashed var(--line-strong);border-radius:10px;color:var(--muted);font-size:14px;text-align:center}
+.mat.drag .cards{outline:3px dashed var(--accent);outline-offset:-6px}
+.mat-msg{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:14px}
+
+/* drawer */
+.scrim{position:fixed;top:0;left:0;right:0;bottom:0;z-index:30;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:40;width:min(480px,100%);display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);transform:translateX(102%);visibility:hidden;transition:transform .24s cubic-bezier(.2,.7,.2,1),visibility 0s linear .24s}
+.drawer.on{transform:none;visibility:visible;transition:transform .24s cubic-bezier(.2,.7,.2,1)}
+.d-head{flex:none;display:flex;align-items:center;gap:4px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.d-tab{height:40px;padding:0 14px;border-radius:8px;border:0;background:none;color:var(--muted);font-size:15px;font-weight:500}
+.d-tab[aria-selected="true"]{background:var(--surface);color:var(--ink)}
+.d-close{margin-left:auto;width:40px;height:40px;border-radius:8px;border:0;background:none;display:grid;place-items:center}
+.d-body{flex:1;min-height:0;overflow-y:auto;padding:18px 20px 28px;font-size:15px;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
+.d-body h2{margin:0 0 .35em;font-size:17px;font-weight:600;line-height:1.4}
+.d-body h3{margin:1.5em 0 .55em;font-size:14px;font-weight:600;color:var(--muted)}
+.d-body p{margin:.4em 0}
+.note-file{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+.note-file:last-child{border-bottom:0}
+.facts{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.facts li{position:relative;padding-left:15px}
+.facts li::before{content:"";position:absolute;left:0;top:.6em;width:7px;height:7px;border-radius:1px;background:var(--marker)}
+.qa{margin:0 0 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.qa summary{display:flex;gap:10px;justify-content:space-between;padding:11px 12px;font-weight:500;cursor:pointer;list-style:none}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary::after{content:"답 보기";flex:none;color:var(--accent);font-size:13px}
+.qa[open] summary::after{content:"접기"}
+.qa .ans{padding:0 12px 12px}
+.log-item{padding:11px 0;border-bottom:1px solid var(--line)}
+.log-item .t{color:var(--muted);font-size:12.5px}
+.log-item .q{color:var(--muted)}
+.log-item .a{font-weight:500}
+.summary-box{margin:0;padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:14.5px;line-height:1.7;white-space:pre-wrap}
+.transcript{display:grid;gap:4px;font-size:14px}
+.transcript .t{margin-right:8px;color:var(--muted);font-size:12px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.opt{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;padding:11px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.opt input{flex:none;width:18px;height:18px;margin-top:3px;accent-color:var(--ink)}
+.opt small{display:block;color:var(--muted);font-size:13px;line-height:1.5}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden}
+.seg button{height:40px;padding:0 16px;border:0;background:var(--panel);font-size:14px}
+.seg button+button{border-left:1px solid var(--line-strong)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.check{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;font-size:14px;line-height:1.5}
+.check .lbl{font-weight:600;white-space:nowrap}
+.ok{color:var(--accent)}.bad{color:var(--live)}.mid{color:var(--warn)}
+.muted{color:var(--muted)}
+.fine{color:var(--muted);font-size:13px;line-height:1.55}
+
+/* reader */
+.reader{position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;display:none;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);background:var(--scrim)}
+.reader.on{display:flex}
+.r-card{width:min(760px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+.r-head{flex:none;display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.r-title{flex:1;min-width:0;overflow:hidden;font-weight:600;font-size:15px;text-overflow:ellipsis;white-space:nowrap}
+.r-body{overflow-y:auto;padding:18px 20px;font-size:calc(16px*var(--scale));line-height:1.75;white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere}
+.iconbtn{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center}
+.iconbtn[disabled]{opacity:.35;cursor:default}
+
+/* toast */
+.toastwrap{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;justify-content:center;padding-top:calc(env(safe-area-inset-top,0px) + 12px);pointer-events:none}
+.toast{max-width:min(92vw,560px);padding:10px 16px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:14.5px;line-height:1.45;opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s}
+.toast.on{opacity:1;transform:none}
+
+.field{display:block;width:100%;height:46px;margin:10px 0 0;padding:0 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--panel);font-size:15px}
+.adv{margin-top:12px}
+.adv summary{cursor:pointer;color:var(--accent);font-size:13.5px;font-weight:500}
+.alert-btn{padding:0;border:0;background:none;color:var(--warn);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+@media (max-width:820px){.top-nav .lbl{display:none}.tbtn{padding:0 10px}}
+@media (max-width:640px){
+  .top-status{display:none}
+  .controls{flex-wrap:wrap}
+  .cap,.ask{flex-basis:100%;min-height:0}
+  .go{flex:1;min-width:0;height:56px}
+  .mic{width:56px;height:56px}
+  .mat{height:24%;min-height:132px}
+}
+@media (max-height:560px){
+  .mat{height:32%;min-height:118px}
+  .cap,.ask{min-height:52px}
+  .go{height:52px}.mic{width:52px;height:52px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트</div>
+  <div class="top-status" id="topStatus" aria-live="polite"></div>
+  <nav class="top-nav" aria-label="패널">
+    <button class="tbtn" data-open="notes" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8.5L18 7v13.5H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11h6M9 14.5h6M9 18h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lbl">준비 노트</span></button>
+    <button class="tbtn" data-open="log" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="lbl">회의 기록</span></button>
+    <button class="tbtn" data-open="settings" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="15" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="lbl">설정</span></button>
+  </nav>
+</header>
+
+<main class="stage" id="stage">
+  <section class="cue" id="cue" aria-live="polite">
+    <p class="cue-q" id="cueQ"></p>
+    <p class="cue-a" id="cueA"></p>
+    <div class="cue-meta" id="cueMeta"></div>
+    <div class="cue-aux" id="cueAux"></div>
+  </section>
+</main>
+
+<section class="controls" id="controls" aria-label="질문 받기">
+  <div class="cap" id="cap">
+    <button class="sq" id="btnType" aria-label="질문 직접 입력"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M6 13.8h1M17 13.8h1M9.5 14h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    <div class="cap-body">
+      <div class="cap-state" id="capState"><span class="dot"></span><span id="capStateTxt">마이크 꺼짐</span></div>
+      <div class="cap-lines" id="capLines">
+        <div id="capFinal"></div>
+        <span class="cap-interim" id="capInterim"></span>
+      </div>
+    </div>
+  </div>
+  <div class="ask" id="ask">
+    <input id="askInput" type="text" enterkeyhint="send" autocomplete="off" placeholder="질문을 입력하세요. 키보드 마이크로 받아써도 돼요">
+    <button class="sq" id="askClose" aria-label="입력 닫기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+  </div>
+  <button class="go" id="btnGo">방금 질문에<br>답하기</button>
+  <button class="mic" id="btnMic" aria-pressed="false" aria-label="마이크 켜기"></button>
+</section>
+
+<section class="mat" id="mat" aria-label="회의 자료">
+  <div class="mat-bar">
+    <div class="tabs" id="tabs" role="tablist" aria-label="올린 자료"></div>
+    <label class="btn small" for="fileInput"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>자료 추가</label>
+    <button class="btn small" id="btnFold" aria-expanded="true">접기</button>
+  </div>
+  <div class="cards" id="cards"></div>
+  <input class="sr" type="file" id="fileInput" multiple tabindex="-1" accept=".pdf,.pptx,.xlsx,.xlsm,.xls,.csv,.txt,.md,.docx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+</section>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="패널">
+  <div class="d-head" role="tablist">
+    <button class="d-tab" data-tab="notes" role="tab">준비 노트</button>
+    <button class="d-tab" data-tab="log" role="tab">회의 기록</button>
+    <button class="d-tab" data-tab="settings" role="tab">설정</button>
+    <button class="d-close" id="dClose" aria-label="패널 닫기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="d-body" id="dBody"></div>
+</aside>
+
+<div class="reader" id="reader" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+  <div class="r-card">
+    <div class="r-head">
+      <button class="iconbtn" id="rPrev" aria-label="이전 쪽"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="iconbtn" id="rNext" aria-label="다음 쪽"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="r-title" id="rTitle"></div>
+      <button class="iconbtn" id="rClose" aria-label="닫기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="r-body" id="rBody"></div>
+  </div>
+</div>
+
+<div class="toastwrap"><div class="toast" id="toast" role="status"></div></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================= 작은 도구 ================= */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const now = () => Date.now();
+const uid = () => Math.random().toString(36).slice(2, 8) + now().toString(36).slice(-4);
+const escText = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escAttr = (s) => escText(s).replace(/"/g, '&quot;');
+const pad2 = (n) => (n < 10 ? '0' : '') + n;
+const hhmm = (t) => { const d = new Date(t); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); };
+const dateStamp = () => { const d = new Date(); return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '_' + pad2(d.getHours()) + pad2(d.getMinutes()); };
+const TE = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+const bytes = (s) => (TE ? TE.encode(String(s)).length : String(s).length * 3);
+const debounce = (fn, ms) => { let t = 0; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+const shortName = (n) => String(n || '').replace(/\.[A-Za-z0-9]{2,5}$/, '');
+
+const ICON = {
+  mic: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3" fill="currentColor"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3" fill="currentColor" opacity=".5"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  x: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+};
+
+const SAFE_LINE = '그 부분은 정확히 확인해서 회의 끝나고 바로 공유드리겠습니다.';
+
+/* ================= 이 기기 안 저장소 (IndexedDB, 실패 시 localStorage) ================= */
+const DBN = 'meeting-cue-v1';
+const kv = (() => {
+  let p = null;
+  const open = () => {
+    if (p) return p;
+    p = new Promise((resolve, reject) => {
+      try {
+        if (!window.indexedDB) { reject(new Error('no-idb')); return; }
+        const req = indexedDB.open(DBN, 1);
+        req.onupgradeneeded = () => { req.result.createObjectStore('kv'); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => reject(new Error('blocked'));
+      } catch (e) { reject(e); }
+    });
+    return p;
+  };
+  const run = async (mode, fn) => {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      let out;
+      const tx = db.transaction('kv', mode);
+      const r = fn(tx.objectStore('kv'));
+      if (r) r.onsuccess = () => { out = r.result; };
+      tx.oncomplete = () => resolve(out);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  };
+  const lsKey = (k) => DBN + ':' + k;
+  return {
+    ok: true,
+    async get(k) {
+      try { return await run('readonly', (st) => st.get(k)); }
+      catch (e) { try { const v = localStorage.getItem(lsKey(k)); return v ? JSON.parse(v) : undefined; } catch (e2) { this.ok = false; return undefined; } }
+    },
+    async set(k, v) {
+      try { await run('readwrite', (st) => st.put(v, k)); return true; }
+      catch (e) { try { localStorage.setItem(lsKey(k), JSON.stringify(v)); return true; } catch (e2) { this.ok = false; return false; } }
+    },
+    async del(k) {
+      try { await run('readwrite', (st) => st.delete(k)); } catch (e) {}
+      try { localStorage.removeItem(lsKey(k)); } catch (e) {}
+    },
+  };
+})();
+
+/* ================= 상태 ================= */
+const S = {
+  files: [], segments: [], qaLog: [], summary: null,
+  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {} },
+  activeFile: null, hits: new Set(), current: null, drawer: null, asking: false,
+  ai: 'checking', index: null, prepared: [], chunkMap: new Map(), totalChars: 0,
+  openQa: new Set(), confirm: '', lastAsk: null, lastQuery: '',
+};
+let segN = 0;
+const readyFiles = () => S.files.filter((f) => f.status === 'ready');
+const fileById = (id) => S.files.find((f) => f.id === id) || null;
+
+const studyForSave = (st) => {
+  const s = { status: (st && st.status) || 'idle', overview: (st && st.overview) || '', facts: (st && st.facts) || [], qa: (st && st.qa) || [], error: (st && st.error) || '', partial: !!(st && st.partial) };
+  if (s.status === 'running' || s.status === 'queued') s.status = (s.facts.length || s.qa.length) ? 'done' : 'idle';
+  return s;
+};
+const fileForSave = (f) => ({ id: f.id, name: f.name, kind: f.kind, size: f.size, addedAt: f.addedAt, warn: f.warn || '', sample: !!f.sample, chunks: f.chunks, study: studyForSave(f.study) });
+const save = {
+  files: debounce(() => kv.set('files', readyFiles().map(fileForSave)), 500),
+  segments: debounce(() => kv.set('segments', S.segments.slice(-5000).map((s) => ({ t: s.t, text: s.text }))), 1800),
+  qaLog: debounce(() => kv.set('qaLog', S.qaLog.slice(-300)), 500),
+  settings: debounce(() => kv.set('settings', S.settings), 300),
+  summary: debounce(() => kv.set('summary', S.summary && S.summary.status === 'done' ? S.summary : null), 400),
+};
+
+/* ================= 외부 라이브러리 (필요할 때만 불러오기) ================= */
+const LIBS = {
+  xlsx: { ok: () => !!window.XLSX, sets: [
+    ['https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'],
+    ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'] ] },
+  zip: { ok: () => !!window.JSZip, sets: [
+    ['https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'],
+    ['https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'] ] },
+  pdf: { ok: () => !!(window.pdfjsLib && window.pdfjsWorker), sets: [
+    ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js', 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'],
+    ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'] ] },
+};
+const libLoading = {};
+const loadScript = (src) => new Promise((resolve, reject) => {
+  const s = document.createElement('script');
+  s.src = src; s.async = false;
+  s.onload = () => resolve();
+  s.onerror = () => { s.remove(); reject(new Error('lib ' + src)); };
+  document.head.appendChild(s);
+});
+function needLib(name) {
+  const L = LIBS[name];
+  if (L.ok()) return Promise.resolve();
+  if (libLoading[name]) return libLoading[name];
+  libLoading[name] = (async () => {
+    let last = null;
+    for (const set of L.sets) {
+      try { for (const u of set) await loadScript(u); if (L.ok()) return; } catch (e) { last = e; }
+    }
+    throw last || new Error('lib ' + name);
+  })();
+  libLoading[name].catch(() => { libLoading[name] = null; });
+  return libLoading[name];
+}
+
+/* ================= 파일 읽기 ================= */
+const NS = {
+  a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+  p: 'http://schemas.openxmlformats.org/presentationml/2006/main',
+  r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  c: 'http://schemas.openxmlformats.org/drawingml/2006/chart',
+  w: 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  rel: 'http://schemas.openxmlformats.org/package/2006/relationships',
+};
+const KIND_LABEL = { pdf: 'PDF', pptx: 'PPT', xlsx: 'XLS', csv: 'CSV', docx: 'DOC', txt: 'TXT' };
+
+function kindOf(name) {
+  const ext = (String(name).split('.').pop() || '').toLowerCase();
+  if (ext === 'pdf') return 'pdf';
+  if (ext === 'pptx') return 'pptx';
+  if (ext === 'xlsx' || ext === 'xlsm' || ext === 'xls') return 'xlsx';
+  if (ext === 'csv') return 'csv';
+  if (ext === 'docx') return 'docx';
+  if (ext === 'txt' || ext === 'md' || ext === 'markdown') return 'txt';
+  if (ext === 'ppt') return 'old-ppt';
+  if (ext === 'doc') return 'old-doc';
+  if (ext === 'hwp' || ext === 'hwpx') return 'hwp';
+  return '';
+}
+const clean = (s) => String(s || '').replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').replace(/[ \t\f\v]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+function readAB(file) {
+  if (file.arrayBuffer) return file.arrayBuffer();
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsArrayBuffer(file); });
+}
+function decodeText(buf) {
+  const u = new Uint8Array(buf);
+  if (u[0] === 0xEF && u[1] === 0xBB && u[2] === 0xBF) return new TextDecoder('utf-8').decode(u.subarray(3));
+  if (u[0] === 0xFF && u[1] === 0xFE) return new TextDecoder('utf-16le').decode(u.subarray(2));
+  if (u[0] === 0xFE && u[1] === 0xFF) return new TextDecoder('utf-16be').decode(u.subarray(2));
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(u); } catch (e) {}
+  try { return new TextDecoder('euc-kr').decode(u); } catch (e) {}
+  return new TextDecoder('utf-8').decode(u);
+}
+function packLines(lines, max) {
+  const groups = []; let cur = []; let len = 0;
+  const flush = () => { if (cur.length) { groups.push(cur); cur = []; len = 0; } };
+  for (const ln of lines) {
+    let t = ln.text || '';
+    while (t.length > max) { flush(); groups.push([Object.assign({}, ln, { text: t.slice(0, max) })]); t = t.slice(max); }
+    if (!t) continue;
+    if (len + t.length + 1 > max) flush();
+    cur.push(Object.assign({}, ln, { text: t })); len += t.length + 1;
+  }
+  flush();
+  return groups;
+}
+function pushSplit(out, loc, text, max) {
+  max = max || 1800;
+  text = clean(text);
+  if (text.length <= max * 1.25) { out.push({ loc, text }); return; }
+  const groups = packLines(text.split('\n').map((t) => ({ text: t })), max);
+  groups.forEach((g, i) => out.push({ loc: loc + ' (' + (i + 1) + '/' + groups.length + ')', text: g.map((x) => x.text).join('\n') }));
+}
+const xmlDoc = (s) => new DOMParser().parseFromString(s, 'application/xml');
+function kids(el) { const out = []; for (let n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 1) out.push(n); return out; }
+function paraText(el) {
+  let s = '';
+  const rec = (node) => {
+    for (const k of kids(node)) {
+      const ln = k.localName;
+      if (ln === 't') s += k.textContent;
+      else if (ln === 'br' || ln === 'tab') s += ' ';
+      else { if (ln === 'p' && s && !/\s$/.test(s)) s += ' '; rec(k); }
+    }
+  };
+  rec(el);
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/* PDF */
+function pdfText(items) {
+  let out = ''; let prev = null;
+  for (const it of items) {
+    if (!it || typeof it.str !== 'string') continue;
+    const tr = it.transform || [1, 0, 0, 1, 0, 0];
+    const x = tr[4], y = tr[5];
+    const fs = Math.max(4, Math.abs(tr[3]) || Math.hypot(tr[2], tr[3]) || Math.abs(tr[0]) || 10);
+    if (prev && it.str) {
+      if (Math.abs(y - prev.y) > fs * 0.45) { if (out && out[out.length - 1] !== '\n') out += '\n'; }
+      else {
+        const gap = x - prev.end;
+        if (gap > fs * 1.5) out += ' | ';
+        else if (gap > fs * 0.2 && out && !/\s$/.test(out) && !/^\s/.test(it.str)) out += ' ';
+      }
+    }
+    out += it.str;
+    if (it.hasEOL) { out += '\n'; prev = null; }
+    else if (it.str) prev = { y, end: x + (it.width || 0) };
+  }
+  return clean(out);
+}
+async function parsePdf(file, onProg) {
+  await needLib('pdf');
+  try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'; } catch (e) {}
+  const data = new Uint8Array(await readAB(file));
+  const pdf = await pdfjsLib.getDocument({ data, isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise;
+  const out = []; let empty = 0;
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const text = pdfText(tc.items);
+    if (text.replace(/\s/g, '').length < 8) empty++;
+    else pushSplit(out, 'p.' + p, text);
+    try { page.cleanup(); } catch (e) {}
+    if (onProg) onProg(p / pdf.numPages);
+    if (p % 3 === 0) await sleep(0);
+  }
+  try { await pdf.destroy(); } catch (e) {}
+  return { chunks: out, warn: empty ? empty + '쪽은 글자를 읽지 못했어요. 스캔 이미지일 수 있어요.' : '' };
+}
+
+/* PPTX */
+async function readRels(zip, partPath) {
+  const cut = partPath.lastIndexOf('/');
+  const dir = partPath.slice(0, cut), base = partPath.slice(cut + 1);
+  const f = zip.file(dir + '/_rels/' + base + '.rels');
+  if (!f) return [];
+  const doc = xmlDoc(await f.async('string'));
+  const els = doc.getElementsByTagNameNS(NS.rel, 'Relationship');
+  const out = [];
+  for (let i = 0; i < els.length; i++) {
+    const e = els[i];
+    if (e.getAttribute('TargetMode') === 'External') continue;
+    out.push({ id: e.getAttribute('Id'), type: e.getAttribute('Type') || '', path: resolvePath(dir, e.getAttribute('Target') || '') });
+  }
+  return out;
+}
+function resolvePath(dir, target) {
+  if (target.charAt(0) === '/') return target.slice(1);
+  const parts = dir ? dir.split('/') : [];
+  target.split('/').forEach((seg) => { if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg); });
+  return parts.join('/');
+}
+async function slidePaths(zip) {
+  try {
+    const pf = zip.file('ppt/presentation.xml');
+    if (pf) {
+      const pres = xmlDoc(await pf.async('string'));
+      const byId = {};
+      (await readRels(zip, 'ppt/presentation.xml')).forEach((r) => { byId[r.id] = r.path; });
+      const ids = pres.getElementsByTagNameNS(NS.p, 'sldId');
+      const out = [];
+      for (let i = 0; i < ids.length; i++) {
+        const rid = ids[i].getAttributeNS(NS.r, 'id') || ids[i].getAttribute('r:id');
+        if (byId[rid] && zip.file(byId[rid])) out.push(byId[rid]);
+      }
+      if (out.length) return out;
+    }
+  } catch (e) {}
+  const num = (s) => Number((s.match(/(\d+)\.xml$/) || [0, 0])[1]);
+  return Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b));
+}
+function drawingLines(root) {
+  const lines = [];
+  const walk = (el) => {
+    for (const k of kids(el)) {
+      if (k.namespaceURI === NS.a && k.localName === 'tbl') {
+        const rows = k.getElementsByTagNameNS(NS.a, 'tr');
+        for (let i = 0; i < rows.length; i++) {
+          const cells = rows[i].getElementsByTagNameNS(NS.a, 'tc');
+          const vals = [];
+          for (let j = 0; j < cells.length; j++) vals.push(paraText(cells[j]));
+          while (vals.length && !vals[vals.length - 1]) vals.pop();
+          if (vals.some(Boolean)) lines.push(vals.join(' | '));
+        }
+      } else if (k.namespaceURI === NS.a && k.localName === 'p') {
+        const t = paraText(k);
+        if (t) lines.push(t);
+      } else walk(k);
+    }
+  };
+  walk(root);
+  return lines;
+}
+function childNS(el, ns, name) { for (const k of kids(el)) if (k.namespaceURI === ns && k.localName === name) return k; return null; }
+function fmtChartNum(v, fc) {
+  const n = Number(v);
+  if (!isFinite(n) || v === '') return v;
+  if (/%/.test(fc || '')) { const d = ((String(fc).split('.')[1] || '').match(/0/g) || []).length; return (n * 100).toFixed(d) + '%'; }
+  if (Number.isInteger(n) && Math.abs(n) >= 1000) return n.toLocaleString('ko-KR');
+  return String(Math.round(n * 1000) / 1000);
+}
+function ptMap(el, numeric) {
+  const m = new Map();
+  const fcEl = el.getElementsByTagNameNS(NS.c, 'formatCode')[0];
+  const fc = fcEl ? fcEl.textContent : '';
+  const pts = el.getElementsByTagNameNS(NS.c, 'pt');
+  for (let i = 0; i < pts.length; i++) {
+    const ix = Number(pts[i].getAttribute('idx'));
+    const vEl = pts[i].getElementsByTagNameNS(NS.c, 'v')[0];
+    if (!vEl || m.has(ix)) continue;
+    const v = vEl.textContent.trim();
+    m.set(ix, numeric ? fmtChartNum(v, pts[i].getAttribute('formatCode') || fc) : v);
+  }
+  return m;
+}
+function chartLines(doc) {
+  const out = [];
+  const title = doc.getElementsByTagNameNS(NS.c, 'title')[0];
+  if (title) {
+    const ts = title.getElementsByTagNameNS(NS.a, 't'); let t = '';
+    for (let i = 0; i < ts.length; i++) t += ts[i].textContent;
+    if (t.trim()) out.push('[차트] ' + t.trim());
+  }
+  const sers = doc.getElementsByTagNameNS(NS.c, 'ser');
+  for (let i = 0; i < sers.length; i++) {
+    const ser = sers[i];
+    const tx = childNS(ser, NS.c, 'tx');
+    let name = '';
+    if (tx) { const v = tx.getElementsByTagNameNS(NS.c, 'v')[0]; name = v ? v.textContent.trim() : paraText(tx); }
+    const cat = childNS(ser, NS.c, 'cat') || childNS(ser, NS.c, 'xVal');
+    const val = childNS(ser, NS.c, 'val') || childNS(ser, NS.c, 'yVal');
+    const cats = cat ? ptMap(cat, false) : new Map();
+    const vals = val ? ptMap(val, true) : new Map();
+    const pairs = Array.from(vals.keys()).sort((a, b) => a - b).slice(0, 60).map((ix) => (cats.has(ix) ? cats.get(ix) + ' ' : '') + vals.get(ix));
+    if (pairs.length) out.push('[차트 값] ' + (name ? name + ': ' : '') + pairs.join(', '));
+  }
+  return out;
+}
+async function parsePptx(file, onProg) {
+  await needLib('zip');
+  const zip = await JSZip.loadAsync(await readAB(file));
+  const paths = await slidePaths(zip);
+  const out = [];
+  for (let i = 0; i < paths.length; i++) {
+    const sf = zip.file(paths[i]);
+    if (!sf) continue;
+    const lines = drawingLines(xmlDoc(await sf.async('string')));
+    let notes = '';
+    for (const r of await readRels(zip, paths[i])) {
+      const part = zip.file(r.path);
+      if (!part) continue;
+      if (/\/notesSlide$/.test(r.type)) {
+        notes = drawingLines(xmlDoc(await part.async('string'))).filter((t) => !/^\d+$/.test(t)).join(' ');
+      } else if (/\/chart$/.test(r.type)) {
+        chartLines(xmlDoc(await part.async('string'))).forEach((t) => lines.push(t));
+      } else if (/\/diagramData$/.test(r.type)) {
+        const d = xmlDoc(await part.async('string'));
+        const ts = d.getElementsByTagNameNS(NS.a, 't'); const arr = [];
+        for (let k = 0; k < ts.length; k++) { const t = ts[k].textContent.trim(); if (t) arr.push(t); }
+        if (arr.length) lines.push('[도형] ' + arr.join(' / '));
+      }
+    }
+    let text = lines.join('\n');
+    if (notes) text += '\n[발표자 노트] ' + notes;
+    if (text.trim()) pushSplit(out, '슬라이드 ' + (i + 1), text);
+    if (onProg) onProg((i + 1) / paths.length);
+  }
+  return { chunks: out };
+}
+
+/* Excel, CSV */
+function sheetChunks(wb, single) {
+  const out = [];
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    if (!ws || !ws['!ref']) continue;
+    let start = 0;
+    try { start = XLSX.utils.decode_range(ws['!ref']).s.r; } catch (e) {}
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: true });
+    const lines = [];
+    for (let i = 0; i < rows.length && lines.length < 20000; i++) {
+      const cells = (rows[i] || []).map((v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+      while (cells.length && !cells[cells.length - 1]) cells.pop();
+      if (!cells.some(Boolean)) continue;
+      lines.push({ text: cells.join(' | '), n: start + i + 1 });
+    }
+    if (!lines.length) continue;
+    const header = lines[0].text.slice(0, 400);
+    packLines(lines, 1500).forEach((g, gi) => {
+      const a = g[0].n, b = g[g.length - 1].n;
+      const rowsLbl = a === b ? a + '행' : a + '–' + b + '행';
+      out.push({ loc: single ? rowsLbl : name + ' 시트 ' + rowsLbl, text: (gi > 0 ? '[머리행] ' + header + '\n' : '') + g.map((l) => l.text).join('\n') });
+    });
+  }
+  return out;
+}
+async function parseXlsx(file) {
+  await needLib('xlsx');
+  const wb = XLSX.read(new Uint8Array(await readAB(file)), { type: 'array' });
+  return { chunks: sheetChunks(wb, false) };
+}
+async function parseCsv(file) {
+  await needLib('xlsx');
+  const wb = XLSX.read(decodeText(await readAB(file)), { type: 'string', raw: true });
+  return { chunks: sheetChunks(wb, true) };
+}
+
+/* Word, 텍스트 */
+function isHead(p) {
+  const ps = p.getElementsByTagNameNS(NS.w, 'pStyle')[0];
+  const v = ps ? (ps.getAttributeNS(NS.w, 'val') || ps.getAttribute('w:val') || '') : '';
+  return /heading|title|제목/i.test(v) || !!p.getElementsByTagNameNS(NS.w, 'outlineLvl')[0];
+}
+async function parseDocx(file) {
+  await needLib('zip');
+  const zip = await JSZip.loadAsync(await readAB(file));
+  const df = zip.file('word/document.xml');
+  if (!df) throw new Error('docx');
+  const doc = xmlDoc(await df.async('string'));
+  const body = doc.getElementsByTagNameNS(NS.w, 'body')[0];
+  const lines = [];
+  const walk = (el) => {
+    for (const k of kids(el)) {
+      if (k.namespaceURI === NS.w && k.localName === 'p') {
+        const t = paraText(k);
+        if (t) lines.push({ text: t, head: isHead(k) });
+      } else if (k.namespaceURI === NS.w && k.localName === 'tbl') {
+        const rows = k.getElementsByTagNameNS(NS.w, 'tr');
+        for (let i = 0; i < rows.length; i++) {
+          const cells = rows[i].getElementsByTagNameNS(NS.w, 'tc'); const vals = [];
+          for (let j = 0; j < cells.length; j++) vals.push(paraText(cells[j]));
+          while (vals.length && !vals[vals.length - 1]) vals.pop();
+          if (vals.some(Boolean)) lines.push({ text: vals.join(' | ') });
+        }
+      } else walk(k);
+    }
+  };
+  if (body) walk(body);
+  const out = []; let cur = []; let len = 0; let head = ''; let k = 0;
+  const flush = () => {
+    if (!cur.length) return;
+    k++;
+    pushSplit(out, '부분 ' + k + (head ? ' ' + head.slice(0, 18) : ''), cur.join('\n'));
+    cur = []; len = 0;
+  };
+  for (const l of lines) {
+    if (l.head && len > 300) flush();
+    if (l.head) head = l.text;
+    if (len + l.text.length > 1600) flush();
+    cur.push(l.text); len += l.text.length + 1;
+  }
+  flush();
+  return { chunks: out };
+}
+async function parseTxt(file) {
+  const text = clean(decodeText(await readAB(file)));
+  const paras = text.split(/\n\s*\n/).map((p) => ({ text: p.trim() })).filter((p) => p.text);
+  return { chunks: packLines(paras, 1600).map((g, i) => ({ loc: '부분 ' + (i + 1), text: g.map((x) => x.text).join('\n\n') })) };
+}
+function parseFile(file, kind, onProg) {
+  if (kind === 'pdf') return parsePdf(file, onProg);
+  if (kind === 'pptx') return parsePptx(file, onProg);
+  if (kind === 'xlsx') return parseXlsx(file);
+  if (kind === 'csv') return parseCsv(file);
+  if (kind === 'docx') return parseDocx(file);
+  return parseTxt(file);
+}
+
+/* ================= 자료 찾기 (한국어 2글자 단위 BM25) ================= */
+function tokens(s) {
+  const out = [];
+  const str = String(s || '').toLowerCase().replace(/(\d),(?=\d{3})/g, '$1');
+  const units = str.match(/\d+(?:\.\d+)?\s?[\uac00-\ud7a3%]/g);
+  if (units) for (const u of units) out.push(u.replace(/\s/g, ''));
+  const runs = str.match(/[\uac00-\ud7a3]+|[a-z]+|\d+(?:\.\d+)?/g);
+  if (!runs) return out;
+  for (const r of runs) {
+    const c = r.charCodeAt(0);
+    if (c >= 0xac00 && c <= 0xd7a3) {
+      if (r.length === 1) out.push(r);
+      else for (let i = 0; i < r.length - 1; i++) out.push(r.substr(i, 2));
+    } else if (r.length > 1 || /\d/.test(r)) out.push(r);
+  }
+  return out;
+}
+function buildIndex() {
+  const docs = []; const df = new Map(); let total = 0;
+  S.chunkMap = new Map(); S.totalChars = 0;
+  for (const f of readyFiles()) {
+    const ft = new Set(tokens(shortName(f.name)));
+    for (const c of f.chunks) {
+      S.chunkMap.set(c.id, { c, f });
+      S.totalChars += c.text.length;
+      const toks = tokens(c.text + '\n' + c.loc);
+      const tf = new Map();
+      for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
+      tf.forEach((v, t) => df.set(t, (df.get(t) || 0) + 1));
+      docs.push({ c, f, tf, ft, len: toks.length || 1 });
+      total += toks.length;
+    }
+  }
+  S.index = { docs, df, N: docs.length, avg: docs.length ? total / docs.length : 1 };
+}
+function idf(t) {
+  if (!S.index) return 1;
+  const n = S.index.df.get(t) || 0;
+  return Math.log(1 + (S.index.N - n + 0.5) / (n + 0.5));
+}
+function rank(query) {
+  if (!S.index || !S.index.N) return [];
+  const q = Array.from(new Set(tokens(query)));
+  const out = [];
+  for (const d of S.index.docs) {
+    let s = 0;
+    for (const t of q) {
+      const f = d.tf.get(t);
+      if (f) s += idf(t) * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / S.index.avg));
+    }
+    if (s > 0) { let fo = 0; for (const t of q) if (d.ft.has(t)) fo++; if (fo) s *= 1 + Math.min(0.3, 0.08 * fo); }
+    out.push({ c: d.c, f: d.f, s });
+  }
+  out.sort((a, b) => b.s - a.s);
+  return out;
+}
+const FIG = /\d[\d,.]*\s?(?:%|억|만|원|명|개|건|배|점|위|곳|평|㎡|톤|조|천|달러|bp)/;
+function bestLines(text, query, n) {
+  const q = new Set(tokens(query));
+  if (!q.size) return '';
+  const lines = String(text).replace(/([.!?])\s+/g, '$1\n').split('\n').map((s) => s.trim()).filter((s) => s.length > 2);
+  const scored = lines.map((ln, i) => {
+    let s = 0; const seen = new Set();
+    for (const t of tokens(ln)) if (q.has(t) && !seen.has(t)) { seen.add(t); const w = idf(t); s += w * w; }
+    if (s > 0 && FIG.test(ln)) s *= 1.5;
+    return { ln, i, s };
+  });
+  return scored.filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, n || 2).sort((a, b) => a.i - b.i)
+    .map((x) => (x.ln.length > 220 ? x.ln.slice(0, 220) + '…' : x.ln)).join('\n');
+}
+function buildPrepared() {
+  S.prepared = [];
+  for (const f of readyFiles()) {
+    if (!f.study || !f.study.qa) continue;
+    for (const it of f.study.qa) S.prepared.push({ q: it.q, a: it.a, src: it.src || [], f, toks: new Set(tokens(it.q)) });
+  }
+}
+function matchPrepared(query) {
+  const qt = new Set(tokens(query));
+  if (qt.size < 3 || !S.prepared.length) return null;
+  let best = null;
+  for (const p of S.prepared) {
+    if (!p.toks.size) continue;
+    let inter = 0;
+    p.toks.forEach((t) => { if (qt.has(t)) inter++; });
+    const score = 0.5 * (2 * inter / (qt.size + p.toks.size)) + 0.5 * (inter / p.toks.size);
+    if (!best || score > best.score) best = { p, score };
+  }
+  return best && best.score >= 0.42 ? best : null;
+}
+function pickContext(query) {
+  const ranked = rank(query);
+  let picked;
+  if (S.totalChars <= 14000) picked = ranked;
+  else {
+    picked = []; let used = 0;
+    for (const h of ranked) {
+      if (picked.length >= 10 || (h.s <= 0 && picked.length >= 2)) break;
+      const len = Math.min(h.c.text.length, 2600);
+      if (used + len > 10000 && picked.length >= 3) break;
+      picked.push(h); used += len;
+    }
+  }
+  return picked.map((h, i) => ({ n: i + 1, c: h.c, f: h.f, s: h.s, text: h.c.text.length > 2600 ? h.c.text.slice(0, 2600) + '…' : h.c.text }));
+}
+const srcOf = (ids) => (ids || []).map((id) => S.chunkMap.get(id)).filter(Boolean);
+function notesText(maxChars) {
+  const lines = [];
+  for (const f of readyFiles()) {
+    const st = f.study;
+    if (!st) continue;
+    if (st.overview) lines.push('「' + shortName(f.name) + '」 요지: ' + st.overview);
+    (st.facts || []).forEach((x) => { const s = srcOf(x.src)[0]; lines.push('- ' + x.text + (s ? ' (' + shortName(s.f.name) + ' ' + s.c.loc + ')' : '')); });
+  }
+  let out = '';
+  for (const l of lines) { if (out.length + l.length > maxChars) break; out += l + '\n'; }
+  return out.trim();
+}
+
+/* ================= AI 연결 (내 API 키, 이 기기에만 저장) ================= */
+const MODELS = {
+  gemini: { quick: 'gemini-3.5-flash-lite', deep: 'gemini-3.5-flash' },
+  claude: { quick: 'claude-haiku-4-5-20251001', deep: 'claude-sonnet-5-5' },
+};
+const GEMINI_ALIAS = { quick: 'gemini-flash-lite-latest', deep: 'gemini-flash-latest' };
+const noThinking = new Set();
+const aiProv = () => (S.settings.provider === 'claude' ? 'claude' : 'gemini');
+const aiKey = () => { const k = (S.settings.keys || {})[aiProv()]; return k ? String(k).trim() : ''; };
+const aiCustom = (tier) => { const o = ((S.settings.models || {})[aiProv()] || {})[tier]; return o ? String(o).trim() : ''; };
+function getSample() {
+  if (!aiKey()) { if (S.ai !== 'absent') { S.ai = 'absent'; renderTop(); } return Promise.resolve(null); }
+  if (S.ai === 'absent' || S.ai === 'checking') { S.ai = 'ready'; renderTop(); }
+  return Promise.resolve(callAI);
+}
+async function checkSampleState() {}
+const netErr = (e) => (e && e.name === 'AbortError' ? { code: 'cancelled', message: 'aborted' } : { code: 'network', message: String((e && e.message) || e) });
+async function httpErr(res) {
+  let raw = '', msg = '', extra = '';
+  try { raw = await res.text(); } catch (e) {}
+  try { const j = JSON.parse(raw); const er = (j && (j.error || j)) || {}; msg = String(er.message || ''); extra = JSON.stringify(er.details || '') + ' ' + String(er.status || er.type || ''); } catch (e) { msg = raw; }
+  const all = msg + ' ' + extra, st = res.status;
+  let code = 'upstream_error';
+  if (/ACCESS_TOKEN_TYPE_UNSUPPORTED/.test(all)) code = 'aq_key';
+  else if (/credit balance/i.test(all)) code = 'no_credit';
+  else if (st === 403 && /model/i.test(msg) && !/API key/i.test(msg)) code = 'bad_model';
+  else if (st === 401 || st === 403 || /API key not valid|API_KEY_INVALID|invalid x-api-key|authentication_error/i.test(all)) code = 'bad_key';
+  else if (st === 404 || /is not found|not_found_error/i.test(all)) code = 'bad_model';
+  else if (st === 429 || /RESOURCE_EXHAUSTED|rate_limit/i.test(all)) code = 'rate_limited';
+  else if (st === 400) code = 'invalid_request';
+  return { code, status: st, message: msg.slice(0, 300) };
+}
+async function readSSE(res, onData, signal) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  const line = (ln) => {
+    ln = ln.replace(/\r$/, '');
+    if (ln.indexOf('data:') !== 0) return;
+    const p = ln.slice(5).trim();
+    if (!p || p === '[DONE]') return;
+    let o;
+    try { o = JSON.parse(p); } catch (e) { return; }
+    onData(o);
+  };
+  try {
+    for (;;) {
+      if (signal && signal.aborted) throw { code: 'cancelled', message: 'aborted' };
+      const r = await reader.read();
+      if (r.done) break;
+      buf += dec.decode(r.value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) { const ln = buf.slice(0, nl); buf = buf.slice(nl + 1); line(ln); }
+    }
+    if (buf.trim()) line(buf);
+  } catch (e) {
+    try { reader.cancel().catch(() => {}); } catch (e2) {}
+    if (e && e.name === 'AbortError') throw { code: 'cancelled', message: 'aborted' };
+    throw e;
+  }
+}
+async function callGemini(model, tier, input, opts) {
+  const gen = { temperature: 0.2, maxOutputTokens: tier === 'quick' ? 1024 : 8192 };
+  if (tier === 'quick' && !noThinking.has(model)) gen.thinkingConfig = /^gemini-2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
+  let res;
+  try {
+    res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':streamGenerateContent?alt=sse', {
+      method: 'POST', signal: opts.signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': aiKey() },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: input }] }], generationConfig: gen }),
+    });
+  } catch (e) { throw netErr(e); }
+  if (!res.ok) {
+    const err = await httpErr(res);
+    if (gen.thinkingConfig && res.status === 400 && /thinking/i.test(err.message)) { noThinking.add(model); return callGemini(model, tier, input, opts); }
+    throw err;
+  }
+  let text = '', truncated = false;
+  try {
+    await readSSE(res, (o) => {
+      if (o.error) throw { code: 'upstream_error', message: String(o.error.message || 'error') };
+      const c = o.candidates && o.candidates[0];
+      if (!c) { if (o.promptFeedback && o.promptFeedback.blockReason) throw { code: 'refused', message: 'blocked' }; return; }
+      const d = ((c.content && c.content.parts) || []).filter((p) => p && !p.thought && typeof p.text === 'string').map((p) => p.text).join('');
+      if (d) { text += d; if (opts.onText) opts.onText({ text, delta: d }); }
+      if (c.finishReason === 'MAX_TOKENS') truncated = true;
+    }, opts.signal);
+  } catch (e) { if (e && typeof e === 'object' && text && !e.text) e.text = text; throw e; }
+  if (!text.trim()) throw { code: 'empty_completion', message: 'empty' };
+  return { text, truncated };
+}
+async function callClaude(model, tier, input, opts) {
+  let res;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: opts.signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model, max_tokens: tier === 'quick' ? 700 : 8000, stream: true, messages: [{ role: 'user', content: input }] }),
+    });
+  } catch (e) { throw netErr(e); }
+  if (!res.ok) throw await httpErr(res);
+  let text = '', truncated = false;
+  try {
+    await readSSE(res, (o) => {
+      if (o.type === 'content_block_delta' && o.delta && o.delta.type === 'text_delta' && o.delta.text) { text += o.delta.text; if (opts.onText) opts.onText({ text, delta: o.delta.text }); }
+      else if (o.type === 'message_delta' && o.delta && o.delta.stop_reason === 'max_tokens') truncated = true;
+      else if (o.type === 'error') throw { code: 'upstream_error', message: String((o.error && o.error.message) || 'error') };
+    }, opts.signal);
+  } catch (e) { if (e && typeof e === 'object' && text && !e.text) e.text = text; throw e; }
+  if (!text.trim()) throw { code: 'empty_completion', message: 'empty' };
+  return { text, truncated };
+}
+async function callAI(input, opts) {
+  opts = opts || {};
+  const tier = opts.modelTier === 'quick' ? 'quick' : 'deep';
+  const prov = aiProv();
+  const run = (m) => (prov === 'claude' ? callClaude : callGemini)(m, tier, input, opts);
+  try {
+    const r = await run(aiCustom(tier) || MODELS[prov][tier]);
+    S.aiOk = true;
+    return r;
+  } catch (e) {
+    if (e && e.code === 'bad_model' && prov === 'gemini' && !aiCustom(tier)) { const r = await run(GEMINI_ALIAS[tier]); S.aiOk = true; return r; }
+    throw e;
+  }
+}
+function errCopy(e) {
+  const c = e && e.code;
+  if (c === 'bad_key') return 'API 키가 맞지 않아요. 설정에서 키를 다시 넣어 주세요';
+  if (c === 'aq_key') return '구글이 이 키(AQ.로 시작)를 거절했어요. AI Studio에서 키를 새로 만들거나 Claude 키를 써 보세요';
+  if (c === 'no_credit') return 'Claude API 크레딧이 부족해요. 콘솔에서 결제 정보를 확인해 주세요';
+  if (c === 'bad_model') return '모델을 찾지 못했어요. 설정의 모델 이름을 비워 두면 기본값을 써요';
+  if (c === 'rate_limited') return '사용 한도에 걸렸어요. 잠시 뒤 다시 눌러 주세요';
+  if (c === 'network') return '인터넷 연결을 확인해 주세요';
+  if (c === 'refused') return 'AI가 이 질문에는 답하지 않았어요';
+  if (c === 'empty_completion') return 'AI가 답을 만들지 못했어요';
+  if (c === 'invalid_request') return '요청이 거절됐어요: ' + String((e && e.message) || '').slice(0, 80);
+  return '연결이 불안정해요. 다시 눌러 주세요';
+}
+function noteSampleError(e) {
+  const c = e && e.code;
+  if (c === 'bad_key' || c === 'aq_key' || c === 'no_credit') S.ai = 'denied';
+  renderTop();
+}
+const aiUsable = () => !!aiKey() && S.ai !== 'denied';
+const aiNote = () => (S.ai === 'denied' ? 'API 키가 거절돼 자료 원문으로 보여드려요' : 'API 키가 없어 자료 원문으로 보여드려요');
+let keyTesting = false;
+async function testKey() {
+  if (keyTesting) return;
+  if (!aiKey()) { toast('먼저 API 키를 넣어 주세요.'); return; }
+  keyTesting = true;
+  toast('연결을 확인하는 중이에요.');
+  try {
+    S.ai = 'ready';
+    await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'quick' });
+    toast('연결됐어요. 이제 AI가 답을 만들어요.');
+    readyFiles().forEach((f) => { const st = f.study && f.study.status; if (!st || st === 'off' || st === 'idle' || st === 'error') queueStudy(f); });
+  } catch (e) {
+    noteSampleError(e);
+    toast(errCopy(e));
+  } finally {
+    keyTesting = false;
+    renderTop();
+    if (S.drawer === 'settings') renderDrawer(true);
+    if (isIdle()) paintIdle();
+  }
+}
+function aiSettingsHtml() {
+  const prov = aiProv(), k = aiKey();
+  let h = '<h3>AI 연결</h3><div class="seg" role="group" aria-label="AI 선택">' +
+    [['gemini', 'Gemini'], ['claude', 'Claude']].map((x) => '<button data-act="provider" data-v="' + x[0] + '" aria-pressed="' + (prov === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+  h += '<input class="field" id="keyInput" type="password" autocomplete="off" spellcheck="false" placeholder="' +
+    (k ? '저장된 키 있음, 끝자리 ' + escAttr(k.slice(-4)) : (prov === 'gemini' ? 'Gemini API 키 붙여 넣기' : 'Claude API 키 붙여 넣기')) + '">';
+  h += '<div class="row"><button class="btn small primary" data-act="save-key">저장하고 연결 확인</button>' +
+    (k ? '<button class="btn small" data-act="test-key">연결 확인</button><button class="btn small" data-act="clear-key">키 지우기</button>' : '') + '</div>';
+  h += '<p class="fine">' + (prov === 'gemini' ? 'Google AI Studio에서 API 키를 만들어 붙여 넣으세요.' : 'Claude 개발자 콘솔에서 API 키를 만들어 붙여 넣으세요. 사용한 만큼 요금이 나와요.') + ' 키는 이 태블릿 브라우저에만 저장되고 파일에는 들어가지 않아요.</p>';
+  const mo = (S.settings.models || {})[prov] || {};
+  h += '<details class="adv"><summary>모델 바꾸기 (고급)</summary><p class="fine">비워 두면 기본값을 써요. 빠른 답변 ' + escText(MODELS[prov].quick) + ', 공부와 요약 ' + escText(MODELS[prov].deep) + '</p>' +
+    '<input class="field" id="mQuick" placeholder="빠른 답변 모델" value="' + escAttr(mo.quick || '') + '"><input class="field" id="mDeep" placeholder="공부, 요약 모델" value="' + escAttr(mo.deep || '') + '">' +
+    '<div class="row"><button class="btn small" data-act="save-models">모델 저장</button></div></details>';
+  return h;
+}
+
+/* ================= 공부하기 (자료 올리면 1회) ================= */
+const studyQ = [];
+let studyBusy = false;
+function queueStudy(f) {
+  if (!f || f.status !== 'ready') return;
+  if (S.ai === 'absent' || S.ai === 'off') { f.study = { status: 'off', facts: [], qa: [] }; refresh(); return; }
+  if (f.study && f.study.ctl) { try { f.study.ctl.abort(); } catch (e) {} }
+  f.study = { status: 'queued', overview: '', facts: [], qa: [] };
+  if (studyQ.indexOf(f.id) < 0) studyQ.push(f.id);
+  refresh();
+  pumpStudy();
+}
+async function pumpStudy() {
+  if (studyBusy) return;
+  studyBusy = true;
+  try {
+    while (studyQ.length) {
+      const f = fileById(studyQ.shift());
+      if (f && f.status === 'ready' && f.study && f.study.status === 'queued') await studyFile(f);
+    }
+  } finally { studyBusy = false; }
+}
+function studyParts(chunks) {
+  const parts = []; let cur = []; let b = 0;
+  for (const c of chunks) {
+    const cb = bytes(c.loc + c.text) + 16;
+    if (cur.length && b + cb > 110000) { parts.push(cur); cur = []; b = 0; }
+    cur.push(c); b += cb;
+  }
+  if (cur.length) parts.push(cur);
+  return parts;
+}
+function studyPrompt(f, part, pi, pn) {
+  const nf = pn > 1 ? 10 : 16, nq = pn > 1 ? 8 : 14;
+  return '너는 회의 준비를 돕는 분석가다. 사용자는 곧 회의에서 아래 자료 「' + f.name + '」' + (pn > 1 ? '(' + (pi + 1) + '/' + pn + '부분)' : '') + '에 대한 질문을 받는다. 회의 중 바로 답할 수 있도록 공부 노트를 만든다.\n\n' +
+    '규칙\n' +
+    '- 자료에 적힌 내용만 쓴다. 외부 지식이나 추측은 쓰지 않는다.\n' +
+    '- 숫자, 단위, 고유명사는 자료 표기 그대로 쓴다.\n' +
+    '- 한 줄에 JSON 객체 하나만 쓴다. 코드펜스, 머리말, 설명은 쓰지 않는다.\n' +
+    '- 아래 순서와 형식을 지킨다. 근거 번호는 [자료]의 대괄호 번호다.\n' +
+    (pi === 0 ? '{"t":"overview","text":"자료의 요지, 2문장 이내"}\n' : '') +
+    '{"t":"fact","text":"핵심 사실이나 숫자 한 줄, 50자 이내","src":[근거 번호]}  ← 최대 ' + nf + '줄, 숫자와 비교, 변화 위주\n' +
+    '{"t":"qa","q":"회의에서 실제로 받을 법한 질문, 말투 그대로","a":"바로 말할 수 있는 답, 존댓말 1~2문장","src":[근거 번호]}  ← 최대 ' + nq + '줄, 날카로운 질문도 포함\n\n' +
+    '[자료]\n' + part.map((c, i) => '[' + (i + 1) + '] ' + c.loc + '\n' + c.text).join('\n\n');
+}
+function looseJson(line) {
+  let s = String(line).trim();
+  const i = s.indexOf('{');
+  if (i < 0) return null;
+  s = s.slice(i).replace(/,\s*$/, '');
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+function applyStudy(st, o, part) {
+  const ids = (arr) => (Array.isArray(arr) ? arr : [arr]).map((n) => part[Number(n) - 1]).filter(Boolean).map((c) => c.id);
+  const txt = (v) => String(v == null ? '' : v).trim();
+  if (o.t === 'overview' && txt(o.text) && !st.overview) st.overview = txt(o.text);
+  else if (o.t === 'fact' && txt(o.text)) st.facts.push({ text: txt(o.text), src: ids(o.src) });
+  else if (o.t === 'qa' && txt(o.q) && txt(o.a)) st.qa.push({ q: txt(o.q), a: txt(o.a), src: ids(o.src) });
+}
+let notesTick = 0;
+function refreshNotesSoon() {
+  if (S.drawer !== 'notes' || notesTick) return;
+  notesTick = requestAnimationFrame(() => { notesTick = 0; renderDrawer(true); });
+}
+async function studyFile(f) {
+  const sample = await getSample();
+  if (!sample || !aiUsable()) { f.study = { status: S.ai === 'denied' ? 'error' : 'off', error: S.ai === 'denied' ? aiNote() : '', facts: [], qa: [] }; refresh(); return; }
+  const all = studyParts(f.chunks);
+  const parts = all.slice(0, 4);
+  const st = { status: 'running', overview: '', facts: [], qa: [], part: 0, parts: parts.length, partial: all.length > parts.length, ctl: new AbortController() };
+  f.study = st;
+  refresh();
+  let failed = null;
+  for (let pi = 0; pi < parts.length; pi++) {
+    if (f.study !== st) return;
+    st.part = pi + 1;
+    refresh();
+    let pending = '';
+    const eat = (line) => { const o = looseJson(line); if (o) applyStudy(st, o, parts[pi]); };
+    try {
+      await sample(studyPrompt(f, parts[pi], pi, parts.length), {
+        modelTier: 'default',
+        signal: st.ctl.signal,
+        onText: (u) => {
+          const lines = (pending + u.delta).split('\n');
+          pending = lines.pop();
+          lines.forEach(eat);
+          if (lines.length) refreshNotesSoon();
+        },
+      });
+      if (pending.trim()) eat(pending);
+    } catch (e) {
+      if (pending.trim()) eat(pending);
+      if (e && e.code === 'cancelled') return;
+      failed = e; noteSampleError(e);
+      break;
+    }
+  }
+  if (f.study !== st) return;
+  st.status = (st.facts.length || st.qa.length) ? 'done' : (failed ? 'error' : 'done');
+  if (failed) st.error = errCopy(failed);
+  delete st.ctl;
+  buildPrepared(); save.files(); refresh();
+}
+
+/* ================= 답하기 ================= */
+const NUM_RE = /(\d[\d,]*(?:\.\d+)?(?:\s?(?:%p|%|퍼센트|bp|조|억|만|천|원|달러|명|개|건|배|점|위|곳|개월|분기|년|월|일|시간|분|초|평|㎡|톤|kg|km))*)/g;
+const NUM_SKIP = /^(\d+분기|(?:19|20)\d\d년|\d{1,2}월|\d{1,2}일)$/;
+const hl = (s, sweep) => escText(s).replace(NUM_RE, (m) => (NUM_SKIP.test(m.replace(/\s/g, '')) ? m : '<mark class="hl' + (sweep ? ' sweep' : '') + '">' + m + '</mark>'));
+
+function answerPrompt(ctx) {
+  const notes = notesText(2600);
+  ctx.notes = notes;
+  let p = '너는 회의 중인 사용자의 답변 프롬프터다. 사용자는 방금 회의에서 질문을 받았고, 네 답을 화면에서 보며 그대로 소리 내어 말한다.\n\n' +
+    '규칙\n' +
+    '1. 아래 [자료]와 [공부 노트]에 적힌 내용만 근거로 쓴다. 자료에 없는 사실, 숫자, 추측은 절대 쓰지 않는다.\n' +
+    '2. 자료로 답할 수 없으면 답변 줄에 "자료에 없음"이라고만 쓴다.\n' +
+    '3. 답변은 존댓말 1~2문장, 결론부터, 90자 안팎. 바로 읽어 말하기 쉽게 쓴다.\n' +
+    '4. 숫자, 단위, 고유명사는 자료 표기 그대로 쓴다. 자료의 숫자로 간단히 계산했다면 그 값 뒤에 "(계산)"을 붙인다.\n' +
+    '5. 근거 줄에는 실제로 참고한 [자료] 번호만 쓴다.\n\n' +
+    '출력은 아래 세 줄만 쓴다. 다른 말은 쓰지 않는다.\n' +
+    '질문: (사용자가 받은 질문을 한 문장으로)\n' +
+    '답변: (1~2문장)\n' +
+    '근거: (번호를 쉼표로 구분, 없으면 "없음")\n\n';
+  if (notes) p += '[공부 노트]\n' + notes + '\n\n';
+  p += '[자료]\n' + (ctx.items.length ? ctx.items.map((x) => '[' + x.n + '] ' + shortName(x.f.name) + ' ' + x.c.loc + '\n' + x.text).join('\n\n') : '(관련 자료 없음)') + '\n\n';
+  if (ctx.explicit) {
+    p += '[받은 질문]\n' + ctx.question;
+    if (ctx.recent.length) p += '\n\n[직전 대화]\n' + ctx.recent.map((l) => '- ' + l).join('\n');
+  } else {
+    p += '[최근 회의 대화]\n음성 인식 자막이라 오타가 있을 수 있고, 말한 사람은 구분되어 있지 않다. 맨 아래가 가장 최근이다.\n' +
+      ctx.recent.map((l) => '- ' + l).join('\n') + '\n\n위 대화에서 사용자에게 마지막으로 들어온 질문을 찾아 답하라.';
+  }
+  while (bytes(p) > 240000 && ctx.items.length > 1) { ctx.items.pop(); return answerPrompt(ctx); }
+  return p;
+}
+function parseAnswer(text) {
+  const t = String(text || '').replace(/\*\*/g, '');
+  const q = /질문\s*[:：]\s*(.+)/.exec(t);
+  const a = /답변\s*[:：]\s*([\s\S]*?)(?=\n\s*근거\s*[:：]|$)/.exec(t);
+  const s = /근거\s*[:：]\s*(.+)/.exec(t);
+  const ans = a ? a[1].replace(/\s+/g, ' ').trim() : '';
+  return { q: q ? q[1].trim() : '', a: ans, src: s ? (s[1].match(/\d+/g) || []).map(Number) : [], notFound: /자료에\s*없음/.test(ans) };
+}
+function checkNumbers(answer, ctx) {
+  if (/\(계산\)/.test(answer)) return { calc: true, bad: [] };
+  const norm = (s) => String(s).replace(/(\d),(?=\d)/g, '$1').replace(/\s+/g, '');
+  const hay = norm(ctx.items.map((x) => x.text).join('\n') + '\n' + (ctx.notes || ''));
+  const bad = [];
+  (norm(answer).match(/\d+(?:\.\d+)?[\uac00-\ud7a3%]?/g) || []).forEach((n) => {
+    const bare = n.replace(/[\uac00-\ud7a3%]$/, '');
+    if (/^\d$/.test(bare) || hay.indexOf(n) >= 0) return;
+    const particle = /[으로은는이가을를에의과와도입며]$/.test(n);
+    if (particle && hay.indexOf(bare) >= 0) return;
+    const show = particle ? bare : n;
+    if (bad.indexOf(show) < 0) bad.push(show);
+  });
+  return { calc: false, bad };
+}
+function recentLines(windowMs, max) {
+  const t = now();
+  const lines = S.segments.filter((s) => t - s.t <= windowMs).slice(-max).map((s) => s.text);
+  if (sp.interim) lines.push(sp.interim);
+  return lines;
+}
+
+let ansCtl = null, ansSeq = 0;
+async function answer(opts) {
+  opts = opts || {};
+  const explicit = !!(opts.question && opts.question.trim());
+  const recent = opts.recent || [];
+  const qText = explicit ? opts.question.trim() : recent.slice(-2).join(' ');
+  if (!readyFiles().length) { toast('먼저 회의 자료를 올려 주세요.'); return; }
+  if (!qText.trim()) {
+    openAsk();
+    toast(sp.want ? '아직 들린 말이 없어요. 질문을 입력해도 돼요.' : '들린 질문이 없어요. 마이크를 켜거나 질문을 입력해 주세요.');
+    return;
+  }
+  S.lastAsk = { question: explicit ? opts.question.trim() : '', recent: recent.slice() };
+  S.lastQuery = qText;
+  const seq = ++ansSeq;
+  if (ansCtl) { try { ansCtl.abort(); } catch (e) {} }
+  const ctl = new AbortController();
+  ansCtl = ctl;
+  const t0 = now();
+  const items = pickContext(qText);
+  const top = items.filter((x) => x.s > 0)[0];
+  const ctx = {
+    seq, explicit, question: explicit ? opts.question.trim() : '', recent: explicit ? recent.slice(-2) : recent, qText, items, t0,
+    ms: null, got: false, note: '',
+    displayQ: explicit ? opts.question.trim() : (recent[recent.length - 1] || ''),
+    excerpt: top ? { c: top.c, f: top.f, text: bestLines(top.c.text, qText, 2) || top.c.text.slice(0, 160), best: bestLines(top.c.text, qText, 1) } : null,
+    prep: matchPrepared(qText),
+  };
+  paintLoading(ctx);
+  markHits(items.filter((x) => x.s > 0).slice(0, 3).map((x) => x.c.id));
+  const timer = setTimeout(() => { if (seq === ansSeq && !ctx.got) paintFallback(ctx, 'AI 답이 늦어 준비된 내용을 먼저 보여드려요'); }, 4000);
+  const sample = await getSample();
+  if (seq !== ansSeq) { clearTimeout(timer); return; }
+  if (!sample || !aiUsable()) { clearTimeout(timer); paintFallback(ctx, aiNote()); logQA(ctx, null, 'fallback'); return; }
+  const prompt = answerPrompt(ctx);
+  const o = {
+    modelTier: 'quick',
+    signal: ctl.signal,
+    onText: (u) => {
+      if (seq !== ansSeq) return;
+      const p = parseAnswer(u.text);
+      if (!p.a) return;
+      if (!ctx.got) { ctx.got = true; ctx.ms = now() - t0; clearTimeout(timer); }
+      if (!p.notFound && !/^자료에/.test(p.a)) paintAnswer(ctx, p, false);
+    },
+  };
+  if (opts.fresh) o.cache = false;
+  try {
+    const res = await sample(prompt, o);
+    if (seq !== ansSeq) return;
+    clearTimeout(timer);
+    let p = parseAnswer(res.text);
+    if (!p.a) p = { q: '', a: String(res.text || '').trim(), src: [], notFound: false };
+    if (ctx.ms == null) ctx.ms = now() - t0;
+    if (S.ai === 'checking') S.ai = 'ready';
+    if (p.notFound) { paintNotFound(ctx); logQA(ctx, p, 'notfound'); return; }
+    ctx.check = checkNumbers(p.a, ctx);
+    paintAnswer(ctx, p, true);
+    const used = p.src.map((n) => ctx.items[n - 1]).filter(Boolean).map((x) => x.c.id);
+    if (used.length) markHits(used);
+    logQA(ctx, p, 'ai');
+  } catch (e) {
+    clearTimeout(timer);
+    if (seq !== ansSeq || !e || e.code === 'cancelled') return;
+    noteSampleError(e);
+    const partial = e.text && e.code !== 'refused' ? parseAnswer(e.text) : null;
+    if (partial && partial.a && !partial.notFound) {
+      ctx.note = errCopy(e);
+      ctx.check = checkNumbers(partial.a, ctx);
+      if (ctx.ms == null) ctx.ms = now() - t0;
+      paintAnswer(ctx, partial, true);
+      logQA(ctx, partial, 'ai');
+    } else {
+      paintFallback(ctx, errCopy(e));
+      logQA(ctx, null, 'fallback');
+    }
+  }
+}
+function logQA(ctx, p, kind) {
+  const q = (p && p.q && !ctx.explicit) ? p.q : (ctx.displayQ || ctx.qText);
+  const a = p ? p.a : (ctx.prep ? ctx.prep.p.a : (ctx.excerpt ? ctx.excerpt.text : '자료에서 찾지 못함'));
+  const src = p ? p.src.map((n) => ctx.items[n - 1]).filter(Boolean).map((x) => x.c.id) : (ctx.excerpt ? [ctx.excerpt.c.id] : []);
+  S.qaLog.push({ t: now(), q, a, kind, src });
+  if (S.qaLog.length > 300) S.qaLog.shift();
+  save.qaLog();
+  if (S.drawer === 'log') renderDrawer(true);
+}
+
+/* ================= 가운데 화면 그리기 ================= */
+const cueEls = { box: $('#cue'), q: $('#cueQ'), a: $('#cueA'), meta: $('#cueMeta'), aux: $('#cueAux') };
+function paint(m) {
+  S.current = m;
+  cueEls.box.setAttribute('aria-busy', m.streaming ? 'true' : 'false');
+  cueEls.q.innerHTML = m.q || '';
+  cueEls.a.className = 'cue-a' + (m.aCls ? ' ' + m.aCls : '') + (m.streaming ? ' streaming' : '');
+  cueEls.a.innerHTML = m.a || '';
+  cueEls.meta.innerHTML = m.meta || '';
+  cueEls.aux.innerHTML = m.aux || '';
+}
+const isIdle = () => !S.current || S.current.kind === 'idle';
+const quoteQ = (q) => (q ? '“' + escText(q) + '”' : '');
+const srcChip = (x) => '<button class="src" data-chunk="' + escAttr(x.c.id) + '"><b>근거</b> ' + escText(shortName(x.f.name)) + ' ' + escText(x.c.loc) + '</button>';
+const excerptHtml = (ex, label) => '<button class="excerpt" data-chunk="' + escAttr(ex.c.id) + '"><span class="excerpt-src">' + escText(label) + ', ' + escText(shortName(ex.f.name)) + ' ' + escText(ex.c.loc) + '</span>' + hl(ex.text) + '</button>';
+
+function paintIdle() {
+  const ready = readyFiles().length > 0;
+  const parsing = S.files.some((f) => f.status === 'parsing');
+  const studying = S.files.some((f) => f.study && (f.study.status === 'running' || f.study.status === 'queued'));
+  let a, aux = '';
+  if (!ready) {
+    a = parsing ? '자료를 읽고 있어요.' : '회의 자료를 올리면, 질문에 바로 답을 띄워 드려요.';
+    aux = '<p class="cue-sub">PDF, PPTX, 엑셀, CSV, 워드, 텍스트 파일을 읽고 미리 공부해 둡니다. 회의 중 질문을 받으면 올린 자료에 있는 내용으로만 1~2문장 답을 만들어요.</p>';
+    if (!parsing) aux += '<div class="cue-actions"><label class="btn primary" for="fileInput">자료 올리기</label><button class="btn" data-act="sample">샘플 자료로 해 보기</button></div>';
+  } else if (sp.blocked) {
+    a = '이 화면에서는 마이크를 쓸 수 없어요.';
+    aux = '<p class="cue-sub">브라우저가 마이크를 막고 있어요. 주소창 왼쪽 아이콘을 눌러 권한에서 마이크를 허용한 뒤 새로고침해 주세요. 태블릿 설정의 Chrome 앱 권한에서도 마이크가 허용돼 있어야 해요. 그동안은 질문을 입력하거나 키보드의 마이크(받아쓰기)로 넣을 수 있어요.</p><div class="cue-actions"><button class="btn primary" data-act="ask">질문 입력하기</button></div>';
+  } else if (sp.want) {
+    a = '듣고 있어요.';
+    aux = '<p class="cue-sub">' + (S.settings.mode === 'auto' ? '질문으로 들리는 말이 나오면 자동으로 답을 띄웁니다. 직접 누르고 싶을 때는 ‘방금 질문에 답하기’를 누르세요.' : '나에게 질문이 오면 ‘방금 질문에 답하기’를 누르세요. 아래 자막에서 문장을 눌러도 그 문장에 답해요.') + '</p>';
+  } else {
+    a = '준비됐어요.';
+    aux = '<p class="cue-sub">회의가 시작되면 오른쪽 아래 마이크를 켜 두세요. 나에게 질문이 오면 ‘방금 질문에 답하기’를 누르면 됩니다.' + (studying ? ' AI가 자료를 공부하는 동안에도 질문에 답할 수 있어요.' : '') + '</p>';
+  }
+  if (!aiKey() && !sp.blocked) aux += '<p class="cue-sub">AI 답변을 쓰려면 설정에서 API 키를 넣어 주세요. 키가 없어도 자료 원문 찾기는 돼요.</p><div class="cue-actions"><button class="btn" data-open="settings">API 키 넣기</button></div>';
+  paint({ kind: 'idle', aCls: 'intro', a: escText(a), aux });
+}
+function paintLoading(ctx) {
+  let aux = '';
+  if (ctx.prep) aux += '<div class="excerpt"><span class="excerpt-src">준비 노트의 비슷한 질문: ' + escText(ctx.prep.p.q) + '</span>' + hl(ctx.prep.p.a) + '</div>';
+  if (ctx.excerpt) aux += excerptHtml(ctx.excerpt, '자료 원문');
+  paint({ kind: 'loading', q: quoteQ(ctx.displayQ), aCls: 'soft', a: '<span class="thinking" aria-hidden="true"><i></i><i></i><i></i></span>자료에서 찾는 중', aux });
+}
+function metaHtml(ctx, chips, final) {
+  let h = chips.slice(0, 3).map(srcChip).join('');
+  if (ctx.ms != null) h += '<span class="meta-txt">' + (ctx.ms / 1000).toFixed(1) + '초</span>';
+  if (final) h += '<button class="linkbtn" data-act="retry">다시 찾기</button>';
+  if (ctx.note) h += '<span class="warnline">' + escText(ctx.note) + '</span>';
+  if (final && ctx.check) {
+    if (ctx.check.calc) h += '<span class="warnline">자료의 숫자로 계산한 값이 들어 있어요. 근거 숫자를 한 번 확인하세요.</span>';
+    else if (ctx.check.bad.length) h += '<span class="warnline">자료 원문에 그대로 없는 숫자: ' + escText(ctx.check.bad.join(', ')) + '. 표기가 다를 수 있으니 근거를 확인하세요.</span>';
+  }
+  return h;
+}
+function paintAnswer(ctx, p, final) {
+  const chips = p.src.map((n) => ctx.items[n - 1]).filter(Boolean);
+  const q = (!ctx.explicit && p.q) ? p.q : ctx.displayQ;
+  paint({ kind: 'answer', q: quoteQ(q), a: hl(p.a, final), streaming: !final, meta: metaHtml(ctx, chips, final), aux: '' });
+}
+function paintNotFound(ctx) {
+  let aux = '<div class="say"><span class="say-lbl">이렇게 말해 보세요</span>“' + SAFE_LINE + '”</div>';
+  if (ctx.excerpt) aux += excerptHtml(ctx.excerpt, '그나마 가까운 자료');
+  paint({ kind: 'notfound', q: quoteQ(ctx.displayQ), aCls: 'soft', a: '올린 자료에서는 답을 찾지 못했어요.', meta: metaHtml(ctx, [], true), aux });
+}
+function paintFallback(ctx, note) {
+  ctx.note = note;
+  if (ctx.prep) {
+    const chips = srcOf(ctx.prep.p.src).map((x) => ({ c: x.c, f: x.f }));
+    paint({ kind: 'fallback', q: quoteQ(ctx.displayQ), a: hl(ctx.prep.p.a, true),
+      meta: '<span class="meta-txt">준비 노트의 답</span>' + metaHtml(Object.assign({}, ctx, { ms: null }), chips, true),
+      aux: '<p class="fine">비슷한 예상 질문: ' + escText(ctx.prep.p.q) + '</p>' + (ctx.excerpt ? excerptHtml(ctx.excerpt, '자료 원문') : '') });
+  } else if (ctx.excerpt) {
+    const one = ctx.excerpt.best || ctx.excerpt.text;
+    paint({ kind: 'fallback', q: quoteQ(ctx.displayQ), a: hl(one, true),
+      meta: '<span class="meta-txt">자료 원문 그대로</span>' + metaHtml(Object.assign({}, ctx, { ms: null }), [{ c: ctx.excerpt.c, f: ctx.excerpt.f }], true),
+      aux: ctx.excerpt.text !== one ? excerptHtml(ctx.excerpt, '주변 내용') : '' });
+  } else {
+    paint({ kind: 'fallback', q: quoteQ(ctx.displayQ), aCls: 'soft', a: '관련 내용을 자료에서 찾지 못했어요.',
+      meta: metaHtml(Object.assign({}, ctx, { ms: null }), [], true),
+      aux: '<div class="say"><span class="say-lbl">이렇게 말해 보세요</span>“' + SAFE_LINE + '”</div>' });
+  }
+}
+
+/* ================= 음성 듣기 ================= */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const UA = navigator.userAgent || '';
+const IS_IOS = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const WEBKIT_ONLY = IS_IOS || (/Safari\//.test(UA) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(UA));
+const sp = { want: false, rec: null, running: false, starting: false, timer: 0, fails: 0, lastStart: 0, lastErr: '', interim: '', lastFinal: '', blocked: false, lastAuto: 0 };
+
+function micPolicy() {
+  try { const p = document.permissionsPolicy || document.featurePolicy; if (p && p.allowsFeature) return p.allowsFeature('microphone'); } catch (e) {}
+  return null;
+}
+function micStart() {
+  if (!SR) {
+    toast('이 브라우저는 음성 인식을 지원하지 않아요. 갤럭시탭은 크롬, 아이패드는 사파리에서 열어 주세요.');
+    openAsk();
+    return;
+  }
+  if (micPolicy() === false) { sp.blocked = true; renderMic(); renderCaptions(); if (isIdle()) paintIdle(); else toast('이 화면에서는 마이크가 막혀 있어요. 질문을 입력해 주세요.'); openAsk(); return; }
+  sp.want = true; sp.fails = 0; sp.blocked = false;
+  spawn();
+  wake.on();
+  if (aiUsable()) checkSampleState(true);
+  renderMic(); renderCaptions();
+  if (isIdle()) paintIdle();
+}
+function micStop() {
+  sp.want = false;
+  clearTimeout(sp.timer);
+  if (sp.rec) { try { sp.rec.stop(); } catch (e) {} }
+  wake.off();
+  renderMic(); renderCaptions();
+  if (isIdle()) paintIdle();
+}
+function spawn() {
+  if (!sp.want || sp.running || sp.starting) return;
+  let rec;
+  try { rec = new SR(); } catch (e) { sp.want = false; renderMic(); toast('음성 인식을 시작하지 못했어요.'); return; }
+  rec.lang = 'ko-KR';
+  rec.interimResults = true;
+  rec.continuous = !WEBKIT_ONLY;
+  rec.maxAlternatives = 1;
+  sp.lastFinal = '';
+  sp.lastStart = now();
+  rec.onstart = () => { sp.starting = false; sp.running = true; sp.lastStart = now(); renderMic(); renderCaptions(); };
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      const tx = String((r[0] && r[0].transcript) || '').trim();
+      if (!tx) continue;
+      if (r.isFinal) {
+        let add = tx;
+        if (sp.lastFinal && tx.indexOf(sp.lastFinal) === 0) add = tx.slice(sp.lastFinal.length).trim();
+        sp.lastFinal = tx;
+        sp.interim = '';
+        if (add) addSegment(add);
+      } else interim += (interim ? ' ' : '') + tx;
+    }
+    if (sp.lastFinal && interim.indexOf(sp.lastFinal) === 0) interim = interim.slice(sp.lastFinal.length).trim();
+    sp.interim = interim;
+    sp.fails = 0;
+    $('#capInterim').textContent = interim;
+    toggleCapEmpty();
+    const box = $('#capLines'); box.scrollTop = box.scrollHeight;
+  };
+  rec.onerror = (e) => {
+    sp.lastErr = (e && e.error) || '';
+    if (sp.lastErr === 'not-allowed' || sp.lastErr === 'service-not-allowed') {
+      sp.want = false; sp.blocked = true;
+      wake.off();
+      if (isIdle()) paintIdle(); else toast('마이크 권한이 없어요. 브라우저 설정에서 마이크를 허용해 주세요.');
+    } else if (sp.lastErr === 'audio-capture') {
+      sp.want = false;
+      toast('마이크를 찾지 못했어요. 다른 앱이 마이크를 쓰고 있는지 확인해 주세요.');
+    } else if (sp.lastErr === 'language-not-supported') {
+      sp.want = false;
+      toast('이 기기에서는 한국어 음성 인식을 쓸 수 없어요.');
+    }
+  };
+  rec.onend = () => {
+    sp.running = false; sp.starting = false; sp.rec = null;
+    const left = (sp.interim || '').trim();
+    sp.interim = ''; $('#capInterim').textContent = '';
+    if (left) addSegment(left);
+    if (!sp.want) { renderMic(); renderCaptions(); if (isIdle()) paintIdle(); return; }
+    const short = now() - sp.lastStart < 1500;
+    sp.fails = short ? sp.fails + 1 : 0;
+    if (sp.fails >= 8) { sp.want = false; wake.off(); renderMic(); renderCaptions(); toast('음성 인식이 자꾸 끊겨요. 마이크 버튼을 다시 눌러 주세요.'); return; }
+    const wait = sp.lastErr === 'network' ? 1500 : 250 + sp.fails * 400;
+    sp.lastErr = '';
+    sp.timer = setTimeout(spawn, wait);
+  };
+  sp.rec = rec; sp.starting = true;
+  try { rec.start(); } catch (e) { sp.starting = false; sp.rec = null; sp.timer = setTimeout(spawn, 700); }
+}
+const Q_END = /(까요|나요|가요|죠|지요|니까|습니까|는지|은지|인지|던가|인가요?|건가요?|을까|할까|냐|래요|대요)\s*[?？.!]*$/;
+const Q_WORD = /(얼마|몇|언제|어디|누가|누구|무엇|뭐|뭘|무슨|어떤|어떻게|어땠|왜|어느|어째서)/;
+function looksLikeQuestion(s) {
+  const t = String(s).trim();
+  if (t.length < 5) return false;
+  if (/[?？]\s*$/.test(t)) return true;
+  if (Q_END.test(t)) return t.length >= 7 || !/죠\s*$/.test(t);
+  return Q_WORD.test(t) && t.length >= 8;
+}
+function addSegment(text) {
+  text = String(text).replace(/\s+/g, ' ').trim();
+  if (!text) return;
+  const last = S.segments[S.segments.length - 1];
+  if (last && last.text === text && now() - last.t < 2500) return;
+  S.segments.push({ id: ++segN, t: now(), text });
+  if (S.segments.length > 5000) S.segments.splice(0, S.segments.length - 5000);
+  save.segments();
+  renderCaptions();
+  if (S.drawer === 'log') renderDrawer(true);
+  if (S.settings.mode === 'auto' && sp.want && looksLikeQuestion(text) && readyFiles().length) {
+    const t = now();
+    if (t - sp.lastAuto > 3500) { sp.lastAuto = t; answer({ recent: recentLines(20000, 3) }); }
+  }
+}
+
+/* 화면 꺼짐 방지 */
+const wake = {
+  lock: null, status: 'off',
+  async on() {
+    if (!('wakeLock' in navigator)) { this.status = 'unsupported'; return; }
+    try {
+      this.lock = await navigator.wakeLock.request('screen');
+      this.status = 'on';
+      this.lock.addEventListener('release', () => { this.lock = null; if (this.status === 'on') this.status = 'released'; });
+    } catch (e) { this.status = 'denied'; }
+  },
+  async off() {
+    this.status = 'off';
+    if (this.lock) { try { await this.lock.release(); } catch (e) {} this.lock = null; }
+  },
+};
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sp.want) {
+    if (!wake.lock) wake.on();
+    if (!sp.running && !sp.starting) { clearTimeout(sp.timer); spawn(); }
+  }
+});
+
+/* ================= 회의 요약 ================= */
+function summaryPrompt(lines, qa) {
+  return '아래는 회의 중 태블릿 마이크로 받아 적은 자막이다. 음성 인식이라 오타와 끊김이 있고, 누가 말했는지는 구분되어 있지 않다.\n' +
+    '자막에 있는 내용만으로 회의를 정리한다. 추측하지 말고, 불확실한 것은 끝에 (불확실)을 붙인다.\n' +
+    '마크다운 기호(#, **) 없이 아래 형식 그대로 쓴다.\n\n' +
+    '한 줄 요약:\n(한 문장)\n\n주요 논의:\n- (3~7개)\n\n결정 사항:\n- (없으면 "없음")\n\n할 일:\n- 할 일 / 담당 / 기한 (자막에 없으면 "미정")\n\n나에게 온 질문:\n- 질문 → 참고한 답 (아래 기록 기준, 없으면 "없음")\n\n' +
+    '[질문과 답 기록]\n' + (qa || '없음') + '\n\n[회의 자막]\n' + lines;
+}
+async function makeSummary() {
+  if (S.segments.length < 3) { toast('요약할 회의 내용이 아직 적어요. 마이크를 켜 두면 자막이 쌓여요.'); return; }
+  const sample = await getSample();
+  if (!sample || !aiUsable()) { toast(aiNote().replace('자료 원문으로 보여드려요', '요약을 만들 수 없어요')); return; }
+  const lines = S.segments.map((s) => '[' + hhmm(s.t) + '] ' + s.text);
+  let total = 0, startAt = lines.length;
+  while (startAt > 0 && total + bytes(lines[startAt - 1]) + 1 < 150000) { startAt--; total += bytes(lines[startAt]) + 1; }
+  const qa = S.qaLog.slice(-30).map((x) => '- 질문: ' + x.q + '\n  답: ' + x.a).join('\n');
+  S.summary = { t: now(), text: '', status: 'running', cut: startAt > 0 };
+  renderDrawer(true);
+  try {
+    const res = await sample(summaryPrompt(lines.slice(startAt).join('\n'), qa), {
+      modelTier: 'default', cache: false,
+      onText: (u) => { if (!S.summary) return; S.summary.text = u.text; const b = $('#sumBox'); if (b) b.textContent = u.text; },
+    });
+    S.summary = { t: now(), text: res.text, status: 'done', cut: startAt > 0 };
+  } catch (e) {
+    noteSampleError(e);
+    S.summary = { t: now(), text: (e && e.text) || '', status: 'error', error: errCopy(e) };
+  }
+  save.summary();
+  if (S.drawer === 'log') renderDrawer(true);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast('복사했어요.'); return; } catch (e) {}
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+  toast(ok ? '복사했어요.' : '복사가 막혀 있어요. 요약 글을 길게 눌러 복사해 주세요.');
+}
+async function saveSummary() {
+  try {
+    const blob = new Blob([S.summary.text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '회의요약_' + dateStamp() + '.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    toast('파일로 저장했어요.');
+  } catch (e) { toast('저장하지 못했어요. 복사해서 붙여 넣어 주세요.'); }
+}
+
+/* ================= 자료 올리기 ================= */
+async function addFiles(list) {
+  const arr = Array.prototype.slice.call(list || []);
+  for (const file of arr) {
+    const kind = kindOf(file.name);
+    if (kind === 'old-ppt') { toast('예전 PPT 형식은 읽을 수 없어요. PPTX나 PDF로 저장해서 올려 주세요.'); continue; }
+    if (kind === 'old-doc') { toast('예전 DOC 형식은 읽을 수 없어요. DOCX나 PDF로 저장해서 올려 주세요.'); continue; }
+    if (kind === 'hwp') { toast('한글(HWP) 파일은 PDF로 저장해서 올려 주세요.'); continue; }
+    if (!kind) { toast(file.name + ': PDF, PPTX, XLSX, CSV, DOCX, TXT만 읽을 수 있어요.'); continue; }
+    if (file.size > 80 * 1024 * 1024) { toast(file.name + ': 80MB보다 큰 파일은 나눠서 올려 주세요.'); continue; }
+    const f = { id: uid(), name: file.name, kind, size: file.size, addedAt: now(), status: 'parsing', progress: 0, chunks: [], study: { status: 'idle' } };
+    S.files.push(f);
+    S.activeFile = f.id;
+    refresh();
+    try {
+      let lastPaint = 0;
+      const res = await parseFile(file, kind, (p) => { f.progress = p; if (now() - lastPaint > 250) { lastPaint = now(); renderMaterials(); } });
+      f.chunks = (res.chunks || []).filter((c) => c.text && c.text.replace(/\s/g, '').length).map((c, i) => ({ id: f.id + ':' + i, loc: c.loc, text: c.text }));
+      f.warn = res.warn || '';
+      if (!f.chunks.length) throw new Error('empty');
+      f.status = 'ready';
+      buildIndex(); buildPrepared(); save.files();
+      refresh();
+      queueStudy(f);
+    } catch (e) {
+      const msg = String((e && ((e.name || '') + ' ' + (e.message || ''))) || '');
+      f.status = 'error';
+      f.error = /Password/i.test(msg) ? '암호가 걸린 파일은 읽을 수 없어요.'
+        : /lib /.test(msg) ? '파일을 읽는 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 올려 주세요.'
+        : /empty/.test(msg) ? '읽을 수 있는 글자가 없어요. 스캔 이미지라면 글자가 있는 PDF로 다시 저장해 주세요.'
+        : '파일을 읽지 못했어요. PDF로 저장해서 다시 올려 보세요.';
+      refresh();
+    }
+  }
+}
+function removeFile(id) {
+  const i = S.files.findIndex((f) => f.id === id);
+  if (i < 0) return;
+  const f = S.files[i];
+  if (f.study && f.study.ctl) { try { f.study.ctl.abort(); } catch (e) {} }
+  f.study = null;
+  S.files.splice(i, 1);
+  const qi = studyQ.indexOf(id); if (qi >= 0) studyQ.splice(qi, 1);
+  if (S.activeFile === id) S.activeFile = S.files[0] ? S.files[0].id : null;
+  buildIndex(); buildPrepared(); save.files();
+  if (!readyFiles().length) { S.current = null; }
+  refresh();
+}
+function loadSample() {
+  if (S.files.some((f) => f.sample)) { toast('샘플 자료가 이미 들어 있어요.'); return; }
+  const mk = (name, kind, rows) => {
+    const id = uid();
+    return { id, name, kind, size: 0, addedAt: now(), sample: true, status: 'ready', warn: '', chunks: rows.map((r, i) => ({ id: id + ':' + i, loc: r[0], text: r[1] })), study: { status: 'idle' } };
+  };
+  const a = mk('샘플_한빛백화점 3분기 실적보고(가상).pdf', 'pdf', [
+    ['p.1', '2026년 3분기 실적 요약 (가상 데이터)\n기간: 2026년 7월~9월\n총매출 8,420억 원, 전년 동기 대비 5.4% 증가\n영업이익 612억 원, 전년 대비 11.2% 증가, 영업이익률 7.3%\n외국인 매출 1,246억 원, 전년 대비 38% 증가, 매출 비중 14.8% (전년 11.3%)\n객단가 18.6만 원 (전년 17.9만 원)\n방문객 수 2,140만 명, 전년 대비 3.1% 증가'],
+    ['p.2', '점포별 3분기 매출\n점포 | 매출 | 전년 대비 | 외국인 매출 비중\n본점 | 3,150억 원 | +6.1% | 22%\n강남점 | 2,480억 원 | +8.2% | 12%\n부산점 | 1,320억 원 | -1.5% | 14%\n대구점 | 870억 원 | +2.3% | 4%\n판교점 | 600억 원 | +12.4% | 6%\n판교점은 개점 2년 차로 성장률이 가장 높음\n5개 점포 중 부산점만 역성장'],
+    ['p.3', '카테고리별 매출 비중과 성장률 (3분기)\n명품 34%, 전년 대비 +9.8%\n패션 22%, -2.1%\n뷰티 14%, +7.5%\n식품 18%, +4.2%\n리빙 12%, +1.1%\n패션은 3분기 연속 역성장, 영패션 PB 브랜드 정리 영향\n뷰티 성장은 외국인 구매가 이끎 (외국인 뷰티 매출 +52%)'],
+    ['p.4', '외국인 고객 분석\n국적별 매출 비중: 중국 41%, 일본 18%, 대만 11%, 동남아 17%, 기타 13%\n1인당 구매액: 중국 42만 원, 일본 29만 원, 동남아 35만 원\n택스리펀드 즉시 환급 이용률 62% (전년 48%)\n외국인 재방문율 21%'],
+    ['p.5', '4분기 전략\n1. 외국인 전용 라운지 2곳 오픈: 본점 11월 10일, 부산점 11월 24일\n2. 연말 팝업스토어 12개 운영: 본점 5개, 강남점 4개, 판교점 3개\n3. VIP 멤버십 개편: 등급 4단계에서 5단계로, 최상위 등급 기준 연 구매 1억 원\n4. 부산점 리뉴얼 1단계 12월 착공, 투자비 180억 원, 2027년 5월 완료 목표\n4분기 매출 목표 9,100억 원 (전년 대비 +6.0%)'],
+    ['p.6', '리스크와 대응\n부산점 역성장 원인: 9월 인근 경쟁 백화점 신규 출점, 주말 주차 대기 평균 35분\n대응: 주말 셔틀버스 운행(해운대, 서면 노선), 식품관 F&B 매장 8개 추가\n환율 리스크: 원화 강세 시 외국인 매출 둔화 가능\n민감도 분석: 원/달러 환율 5% 하락 시 외국인 매출 약 4% 감소 추정'],
+  ]);
+  const b = mk('샘플_점포별 월매출(가상).xlsx', 'xlsx', [
+    ['월매출 시트 1–6행', '점포 | 7월 | 8월 | 9월 | 3분기 합계 | 3분기 목표 | 달성률\n본점 | 1,020억 | 1,080억 | 1,050억 | 3,150억 | 3,100억 | 101.6%\n강남점 | 800억 | 850억 | 830억 | 2,480억 | 2,400억 | 103.3%\n부산점 | 450억 | 470억 | 400억 | 1,320억 | 1,420억 | 93.0%\n대구점 | 285억 | 300억 | 285억 | 870억 | 880억 | 98.9%\n판교점 | 190억 | 210억 | 200억 | 600억 | 560억 | 107.1%'],
+  ]);
+  S.files.push(a, b);
+  S.activeFile = a.id;
+  buildIndex(); buildPrepared(); save.files();
+  refresh();
+  queueStudy(a); queueStudy(b);
+  toast('샘플 자료를 넣었어요. “본점 3분기 매출 얼마였죠?”처럼 물어보세요.');
+}
+
+/* ================= 화면 조각 그리기 ================= */
+function refresh() {
+  renderTop();
+  renderMaterials();
+  if (S.drawer) renderDrawer(true);
+  if (isIdle()) paintIdle();
+}
+function renderTop() {
+  const parts = [];
+  const ready = readyFiles();
+  if (!S.files.length) parts.push('<span>자료 없음</span>');
+  else {
+    const parsing = S.files.some((f) => f.status === 'parsing');
+    const studying = ready.some((f) => f.study && (f.study.status === 'running' || f.study.status === 'queued'));
+    const done = ready.length && ready.every((f) => f.study && f.study.status === 'done');
+    parts.push('<span>자료 ' + ready.length + '개' + (parsing ? ', 읽는 중' : studying ? ', AI가 공부 중' : done ? ', 공부 완료' : '') + '</span>');
+  }
+  if (S.ai === 'absent') parts.push('<button class="alert-btn" data-open="settings">API 키를 넣으면 AI가 답해요</button>');
+  else if (S.ai === 'denied') parts.push('<button class="alert-btn" data-open="settings">API 키를 확인해 주세요</button>');
+  if (S.settings.mode === 'auto') parts.push('<span>자동 답변 켜짐</span>');
+  $('#topStatus').innerHTML = parts.join('');
+}
+function fileStatus(f) {
+  if (f.status === 'parsing') return { text: '읽는 중 ' + Math.round((f.progress || 0) * 100) + '%', busy: true };
+  if (f.status === 'error') return { text: '읽기 실패', bad: true };
+  const st = f.study || {};
+  if (st.status === 'queued') return { text: '공부 대기', busy: true };
+  if (st.status === 'running') return { text: '공부 중' + (st.parts > 1 ? ' ' + st.part + '/' + st.parts : ''), busy: true };
+  if (st.status === 'done') return { text: '공부 완료' };
+  if (st.status === 'error') return { text: '공부 못 함', bad: true };
+  return { text: '' };
+}
+function renderMaterials() {
+  const mat = $('#mat'), tabs = $('#tabs'), cards = $('#cards');
+  mat.classList.toggle('closed', !S.settings.matOpen);
+  const fold = $('#btnFold');
+  fold.textContent = S.settings.matOpen ? '접기' : '자료 보기';
+  fold.setAttribute('aria-expanded', S.settings.matOpen ? 'true' : 'false');
+  if (!S.files.length) {
+    tabs.innerHTML = '';
+    cards.innerHTML = '<div class="mat-empty"><span>회의 자료를 여기에 올려 주세요. PDF, PPTX, XLSX, CSV, DOCX, TXT</span><label class="btn small primary" for="fileInput">자료 올리기</label><button class="btn small" data-act="sample">샘플 자료로 해 보기</button></div>';
+    return;
+  }
+  if (!fileById(S.activeFile)) S.activeFile = S.files[0].id;
+  tabs.innerHTML = S.files.map((f) => {
+    const on = f.id === S.activeFile;
+    const st = fileStatus(f);
+    const armed = S.confirm === 'rm:' + f.id;
+    return '<div class="ftab' + (on ? ' on' : '') + '"><button class="ftab-main" role="tab" aria-selected="' + on + '" data-file="' + f.id + '">' +
+      '<span class="kind">' + (f.sample ? '샘플' : (KIND_LABEL[f.kind] || '')) + '</span><span class="nm">' + escText(shortName(f.name)) + '</span>' +
+      (st.text ? '<span class="st' + (st.busy ? ' busy' : '') + (st.bad ? ' bad' : '') + '">' + escText(st.text) + '</span>' : '') + '</button>' +
+      (on ? '<button class="x' + (armed ? ' arm' : '') + '" data-act="rm" data-file="' + f.id + '" aria-label="' + escAttr(f.name) + ' 목록에서 빼기">' + (armed ? '빼기' : ICON.x) + '</button>' : '') + '</div>';
+  }).join('');
+  renderCards();
+}
+function renderCards() {
+  const f = fileById(S.activeFile), cards = $('#cards');
+  if (!f) { cards.innerHTML = ''; return; }
+  if (f.status === 'parsing') { cards.innerHTML = '<div class="mat-msg">읽는 중이에요. ' + Math.round((f.progress || 0) * 100) + '%</div>'; return; }
+  if (f.status === 'error') { cards.innerHTML = '<div class="mat-msg">' + escText(f.error || '파일을 읽지 못했어요.') + '</div>'; return; }
+  let h = '';
+  if (f.warn) h += '<div class="page note"><span class="loc">알림</span><span class="tx">' + escText(f.warn) + '</span></div>';
+  h += f.chunks.map((c) => '<button class="page' + (S.hits.has(c.id) ? ' hit' : '') + '" data-chunk="' + escAttr(c.id) + '"><span class="loc">' + escText(c.loc) + '</span><span class="tx">' + escText(c.text.slice(0, 600)) + '</span></button>').join('');
+  cards.innerHTML = h;
+}
+function markHits(ids) {
+  S.hits = new Set(ids);
+  const first = ids.length ? S.chunkMap.get(ids[0]) : null;
+  if (first && first.f.id !== S.activeFile) { S.activeFile = first.f.id; renderMaterials(); }
+  else $$('#cards .page[data-chunk]').forEach((el) => el.classList.toggle('hit', S.hits.has(el.getAttribute('data-chunk'))));
+  if (!first) return;
+  const box = $('#cards');
+  const el = $$('#cards .page[data-chunk]').find((x) => x.getAttribute('data-chunk') === ids[0]);
+  if (el) {
+    const left = Math.max(0, el.offsetLeft - (box.clientWidth - el.clientWidth) / 2);
+    try { box.scrollTo({ left, behavior: 'smooth' }); } catch (e) { box.scrollLeft = left; }
+  }
+}
+function toggleCapEmpty() {
+  const fin = $('#capFinal');
+  const empty = fin.getAttribute('data-empty') === '1';
+  if (empty && sp.interim) fin.innerHTML = '';
+  if (empty && sp.interim) fin.removeAttribute('data-empty');
+}
+function renderCaptions() {
+  const st = $('#capState');
+  st.classList.toggle('live', sp.want && sp.running);
+  $('#capStateTxt').textContent = !SR ? '음성 인식 안 됨' : sp.blocked ? '마이크 막힘' : sp.want ? (sp.running ? '듣는 중' : '마이크 연결 중') : '마이크 꺼짐';
+  const t = now();
+  const segs = S.segments.filter((s) => t - s.t < 15 * 60 * 1000).slice(-4);
+  const fin = $('#capFinal');
+  if (!segs.length && !sp.interim) {
+    fin.setAttribute('data-empty', '1');
+    fin.innerHTML = '<span class="cap-empty">' + (!SR ? '이 브라우저는 음성 인식이 안 돼요. 키보드 아이콘을 눌러 질문을 입력하세요.'
+      : sp.blocked ? '마이크가 막혀 있어요. 키보드 아이콘을 눌러 질문을 입력하세요.'
+      : sp.want ? '말소리가 들리면 여기에 자막이 나와요.' : '마이크를 켜면 회의 내용이 여기에 자막으로 흘러요.') + '</span>';
+  } else {
+    fin.removeAttribute('data-empty');
+    fin.innerHTML = segs.map((s) => '<button class="cap-line" data-seg="' + s.id + '" aria-label="이 문장에 답하기: ' + escAttr(s.text) + '">' + escText(s.text) + '</button>').join('');
+  }
+  $('#capInterim').textContent = sp.interim || '';
+  const box = $('#capLines'); box.scrollTop = box.scrollHeight;
+}
+function renderMic() {
+  const b = $('#btnMic');
+  b.classList.toggle('live', sp.want);
+  b.classList.toggle('off', !SR || sp.blocked);
+  b.setAttribute('aria-pressed', sp.want ? 'true' : 'false');
+  b.setAttribute('aria-label', sp.want ? '마이크 끄기' : '마이크 켜기');
+  b.innerHTML = (!SR || sp.blocked) && !sp.want ? ICON.micOff : ICON.mic;
+}
+function applyScale() {
+  document.documentElement.style.setProperty('--scale', String(S.settings.scale || 1));
+}
+function openAsk() {
+  S.asking = true;
+  $('#controls').classList.add('asking');
+  $('#btnGo').textContent = '답하기';
+  setTimeout(() => { try { $('#askInput').focus(); } catch (e) {} }, 30);
+}
+function closeAsk() {
+  S.asking = false;
+  $('#controls').classList.remove('asking');
+  $('#btnGo').innerHTML = '방금 질문에<br>답하기';
+  $('#askInput').blur();
+}
+function submitAsk() {
+  const v = $('#askInput').value.trim();
+  if (!v) { toast('질문을 입력해 주세요.'); $('#askInput').focus(); return; }
+  $('#askInput').value = '';
+  $('#askInput').blur();
+  answer({ question: v, recent: recentLines(20000, 2) });
+}
+
+/* 패널 */
+let drawerOpener = null;
+function openDrawer(tab) {
+  if (!S.drawer) drawerOpener = document.activeElement;
+  S.drawer = tab;
+  renderDrawer(false);
+  const d = $('#drawer');
+  d.classList.add('on'); d.setAttribute('aria-hidden', 'false');
+  $('#scrim').classList.add('on');
+  $$('.tbtn[data-open]').forEach((b) => b.setAttribute('aria-expanded', b.getAttribute('data-open') === tab ? 'true' : 'false'));
+  const tb = $('.d-tab[data-tab="' + tab + '"]'); if (tb) tb.focus();
+}
+function closeDrawer() {
+  S.drawer = null;
+  const d = $('#drawer');
+  d.classList.remove('on'); d.setAttribute('aria-hidden', 'true');
+  $('#scrim').classList.remove('on');
+  $$('.tbtn[data-open]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  if (drawerOpener && drawerOpener.focus) { try { drawerOpener.focus(); } catch (e) {} }
+}
+function renderDrawer(keepScroll) {
+  if (!S.drawer) return;
+  $$('.d-tab').forEach((b) => b.setAttribute('aria-selected', b.getAttribute('data-tab') === S.drawer ? 'true' : 'false'));
+  const body = $('#dBody');
+  const y = body.scrollTop;
+  body.innerHTML = S.drawer === 'notes' ? notesHtml() : S.drawer === 'log' ? logHtml() : settingsHtml();
+  body.scrollTop = keepScroll ? y : 0;
+}
+function srcLink(ids) {
+  const x = srcOf(ids)[0];
+  return x ? ' <button class="linkbtn" data-chunk="' + escAttr(x.c.id) + '">' + escText(x.c.loc) + '</button>' : '';
+}
+function notesHtml() {
+  const files = readyFiles();
+  if (!files.length) return '<p class="muted">자료를 올리면 AI가 공부한 내용이 여기에 정리돼요. 회의 전에 예상 질문으로 연습해 보세요.</p>';
+  return files.map((f) => {
+    const st = f.study || { status: 'idle' };
+    let h = '<section class="note-file"><h2>' + escText(shortName(f.name)) + '</h2>';
+    if (st.status === 'queued') h += '<p class="muted">공부 순서를 기다리는 중이에요.</p>';
+    if (st.status === 'running') h += '<p class="muted">공부하는 중이에요' + (st.parts > 1 ? ' (' + st.part + '/' + st.parts + ')' : '') + '. 보통 1분 안팎 걸리고, 그동안에도 질문에 답할 수 있어요.</p>';
+    if (st.status === 'error') h += '<p class="muted">공부하지 못했어요. ' + escText(st.error || '') + '</p>';
+    if (st.status === 'off') h += '<p class="muted">API 키가 없어 공부 노트를 만들 수 없어요. 설정에서 키를 넣으면 공부를 시작해요.</p>';
+    if (st.status === 'idle') h += '<p class="muted">아직 공부하지 않았어요.</p>';
+    if (st.overview) h += '<p>' + hl(st.overview) + '</p>';
+    if (st.facts && st.facts.length) h += '<h3>핵심 숫자와 사실</h3><ul class="facts">' + st.facts.map((x) => '<li>' + hl(x.text) + srcLink(x.src) + '</li>').join('') + '</ul>';
+    if (st.qa && st.qa.length) {
+      h += '<h3>예상 질문 ' + st.qa.length + '개, 눌러서 답을 떠올려 본 뒤 확인하세요</h3>';
+      h += st.qa.map((x, i) => {
+        const key = f.id + ':' + i;
+        return '<details class="qa" data-key="' + escAttr(key) + '"' + (S.openQa.has(key) ? ' open' : '') + '><summary>' + escText(x.q) + '</summary><div class="ans">' + hl(x.a) + srcLink(x.src) + '</div></details>';
+      }).join('');
+    }
+    if (st.partial && st.status === 'done') h += '<p class="fine">자료가 길어서 앞부분 위주로 공부했어요. 뒷부분도 원문 찾기로는 답할 수 있어요.</p>';
+    if (st.status !== 'running' && st.status !== 'queued' && aiUsable()) h += '<div class="row"><button class="btn small" data-act="restudy" data-file="' + f.id + '">' + (st.status === 'done' ? '다시 공부하기' : '공부하기') + '</button></div>';
+    return h + '</section>';
+  }).join('');
+}
+function logHtml() {
+  const armed = S.confirm === 'new-meeting';
+  let h = '<div class="row"><button class="btn small primary" data-act="summarize"' + (S.summary && S.summary.status === 'running' ? ' disabled' : '') + '>' + (S.summary && S.summary.text ? '요약 다시 만들기' : '회의 요약 만들기') + '</button>' +
+    '<button class="btn small' + (armed ? ' danger' : '') + '" data-act="new-meeting">' + (armed ? '자막과 기록을 지울까요? 한 번 더 누르기' : '새 회의 시작') + '</button></div>';
+  h += '<h3>요약</h3>';
+  if (S.summary && (S.summary.text || S.summary.status === 'running')) {
+    h += '<p class="summary-box" id="sumBox">' + escText(S.summary.text || '요약을 만드는 중이에요. 보통 30초에서 1분 걸려요.') + '</p>';
+    if (S.summary.cut) h += '<p class="fine">회의가 길어서 뒷부분 위주로 요약했어요.</p>';
+    if (S.summary.status === 'done') h += '<div class="row"><button class="btn small" data-act="copy-summary">복사</button><button class="btn small" data-act="save-summary">파일로 저장</button></div>';
+  } else h += '<p class="muted">회의가 끝나면 자막을 바탕으로 논의, 결정 사항, 할 일을 정리해 드려요.</p>';
+  if (S.summary && S.summary.status === 'error') h += '<p class="muted">' + escText(S.summary.error || '') + '</p>';
+  h += '<h3>받은 질문과 답 ' + S.qaLog.length + '개</h3>';
+  h += S.qaLog.length ? S.qaLog.slice().reverse().map((x) => {
+    const tag = x.kind === 'ai' ? '' : x.kind === 'notfound' ? ', 자료에 없음' : ', 자료 원문';
+    return '<div class="log-item"><div class="t">' + hhmm(x.t) + tag + '</div><div class="q">' + escText(x.q) + '</div><div class="a">' + hl(x.a) + '</div>' + (x.src && x.src.length ? srcLink(x.src) : '') + '</div>';
+  }).join('') : '<p class="muted">아직 받은 질문이 없어요.</p>';
+  h += '<h3>자막 ' + S.segments.length + '줄</h3>';
+  h += S.segments.length ? '<div class="transcript">' + S.segments.slice(-400).map((s) => '<div><span class="t">' + hhmm(s.t) + '</span>' + escText(s.text) + '</div>').join('') + '</div>' : '<p class="muted">마이크를 켜면 회의 자막이 쌓여요.</p>';
+  return h;
+}
+function settingsHtml() {
+  const m = S.settings.mode;
+  const opt = (v, title, sub) => '<label class="opt"><input type="radio" name="mode" value="' + v + '"' + (m === v ? ' checked' : '') + '><span>' + title + '<small>' + sub + '</small></span></label>';
+  let h = aiSettingsHtml() + '<h3>답변 방식</h3>';
+  h += opt('button', '버튼을 누를 때만 (추천)', '나에게 온 질문인지는 내가 판단하고 ‘방금 질문에 답하기’를 누릅니다. 이미 지나간 질문에도 답할 수 있어요.');
+  h += opt('auto', '질문이 들리면 자동으로', '질문 말투가 들리면 바로 답을 띄웁니다. 다른 사람끼리 주고받는 질문에도 답이 뜰 수 있어요.');
+  h += '<h3>답변 글자 크기</h3><div class="seg" role="group" aria-label="답변 글자 크기">' +
+    [[0.85, '작게'], [1, '보통'], [1.2, '크게']].map((x) => '<button data-act="scale" data-v="' + x[0] + '" aria-pressed="' + (S.settings.scale === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+  const rows = [];
+  if (!SR) rows.push(['bad', '음성 인식', '이 브라우저에서는 안 돼요. 갤럭시탭은 크롬, 아이패드는 사파리에서 열어 주세요. 그동안은 키보드 받아쓰기로 질문을 넣을 수 있어요.']);
+  else if (sp.blocked || micPolicy() === false) rows.push(['bad', '음성 인식', '마이크가 막혀 있어요. 주소창 왼쪽 아이콘을 눌러 권한에서 마이크를 허용한 뒤 새로고침해 주세요.']);
+  else rows.push(['ok', '음성 인식', sp.want ? '듣고 있어요.' : '지원돼요. 마이크를 처음 켤 때 권한을 물어보면 허용해 주세요.']);
+  const pn = aiProv() === 'claude' ? 'Claude' : 'Gemini';
+  if (!aiKey()) rows.push(['bad', 'AI 답변', '맨 위 AI 연결에 API 키를 넣어 주세요. 지금은 자료 원문만 보여드려요.']);
+  else if (S.ai === 'denied') rows.push(['bad', 'AI 답변', '키가 거절됐어요. 맨 위에서 키를 다시 넣어 주세요. 지금은 자료 원문만 보여드려요.']);
+  else if (S.aiOk) rows.push(['ok', 'AI 답변', pn + '에 연결됐어요.']);
+  else rows.push(['mid', 'AI 답변', pn + ' 키가 저장돼 있어요. ‘연결 확인’으로 시험해 보세요.']);
+  if (wake.status === 'on') rows.push(['ok', '화면 꺼짐', '마이크를 켜 둔 동안 화면이 꺼지지 않게 해 두었어요.']);
+  else if (wake.status === 'denied' || wake.status === 'unsupported' || wake.status === 'released') rows.push(['mid', '화면 꺼짐', '이 화면에서는 자동으로 막을 수 없어요. 태블릿 설정에서 화면 자동 꺼짐 시간을 길게 바꿔 두세요.']);
+  else rows.push(['mid', '화면 꺼짐', '마이크를 켜면 화면 꺼짐 방지를 시도해요. 안 되면 태블릿 설정에서 자동 꺼짐 시간을 길게 해 두세요.']);
+  rows.push([kv.ok ? 'ok' : 'mid', '저장 위치', kv.ok ? '자료와 기록은 이 태블릿의 브라우저에만 저장돼요.' : '이 브라우저에서는 저장이 안 돼요. 새로고침하면 자료를 다시 올려야 해요.']);
+  h += '<h3>회의 전 점검</h3><div class="check">' + rows.map((r) => '<span class="lbl ' + r[0] + '">' + r[1] + '</span><span>' + r[2] + '</span>').join('') + '</div>';
+  h += '<p class="fine">안드로이드에서 마이크가 다시 켜질 때 ‘띵’ 소리가 나면 태블릿 미디어 볼륨을 줄여 두세요. 회의 전에 샘플 질문 하나로 마이크와 답변을 시험해 보는 걸 권해요.</p>';
+  h += '<h3>데이터</h3><p class="fine">자료, 자막, 질문과 답은 이 태블릿 브라우저에만 저장돼요. 답을 만들 때는 질문과 관련된 자료 일부만 선택한 AI(Google Gemini 또는 Anthropic Claude)로 보내요. 실제 사내 자료 대신 가상 데이터로 써 보세요.</p>';
+  const a1 = S.confirm === 'clear-files', a2 = S.confirm === 'clear-log';
+  h += '<div class="row"><button class="btn small' + (a1 ? ' danger' : '') + '" data-act="clear-files">' + (a1 ? '정말 지울까요? 한 번 더 누르기' : '자료 모두 지우기') + '</button>' +
+    '<button class="btn small' + (a2 ? ' danger' : '') + '" data-act="clear-log">' + (a2 ? '정말 지울까요? 한 번 더 누르기' : '회의 기록 지우기') + '</button></div>';
+  return h;
+}
+
+/* 원문 보기 */
+const reader = { fileId: null, idx: 0, opener: null };
+function openReader(chunkId) {
+  const hit = S.chunkMap.get(chunkId);
+  if (!hit) return;
+  reader.opener = document.activeElement;
+  reader.fileId = hit.f.id;
+  reader.idx = hit.f.chunks.indexOf(hit.c);
+  renderReader();
+  $('#reader').classList.add('on');
+  $('#rClose').focus();
+}
+function renderReader() {
+  const f = fileById(reader.fileId);
+  if (!f || !f.chunks[reader.idx]) { closeReader(); return; }
+  const c = f.chunks[reader.idx];
+  $('#rTitle').textContent = shortName(f.name) + '  ' + c.loc;
+  let html = escText(c.text);
+  const best = S.lastQuery ? bestLines(c.text, S.lastQuery, 3) : '';
+  if (best) best.split('\n').forEach((ln) => { const raw = ln.replace(/…$/, ''); if (raw.length > 3) html = html.split(escText(raw)).join('<mark class="ln">' + escText(raw) + '</mark>'); });
+  $('#rBody').innerHTML = html;
+  $('#rBody').scrollTop = 0;
+  $('#rPrev').disabled = reader.idx <= 0;
+  $('#rNext').disabled = reader.idx >= f.chunks.length - 1;
+}
+function closeReader() {
+  $('#reader').classList.remove('on');
+  if (reader.opener && reader.opener.focus) { try { reader.opener.focus(); } catch (e) {} }
+}
+
+let toastT = 0;
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('on'), 3600);
+}
+let confirmT = 0;
+function arm(key) {
+  S.confirm = key;
+  clearTimeout(confirmT);
+  confirmT = setTimeout(() => { S.confirm = ''; renderMaterials(); if (S.drawer) renderDrawer(true); }, 4000);
+}
+
+/* ================= 이벤트 ================= */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act],[data-chunk],[data-file],[data-seg],[data-open],[data-tab]');
+  if (!t) return;
+  const act = t.getAttribute('data-act');
+  if (act) {
+    e.preventDefault();
+    if (act === 'sample') loadSample();
+    else if (act === 'ask') openAsk();
+    else if (act === 'retry') { if (S.lastAsk) answer({ question: S.lastAsk.question, recent: S.lastAsk.recent, fresh: true }); }
+    else if (act === 'rm') {
+      const id = t.getAttribute('data-file');
+      if (S.confirm === 'rm:' + id) { S.confirm = ''; removeFile(id); } else { arm('rm:' + id); renderMaterials(); }
+    }
+    else if (act === 'restudy') { const f = fileById(t.getAttribute('data-file')); if (f) queueStudy(f); }
+    else if (act === 'summarize') makeSummary();
+    else if (act === 'copy-summary') { if (S.summary && S.summary.text) copyText(S.summary.text); }
+    else if (act === 'save-summary') { if (S.summary && S.summary.text) saveSummary(); }
+    else if (act === 'provider') { S.settings.provider = t.getAttribute('data-v') === 'claude' ? 'claude' : 'gemini'; S.aiOk = false; S.ai = aiKey() ? 'ready' : 'absent'; save.settings(); renderTop(); renderDrawer(true); if (isIdle()) paintIdle(); }
+    else if (act === 'save-key') {
+      const v = (($('#keyInput') || {}).value || '').trim();
+      if (!v) { toast('API 키를 붙여 넣어 주세요.'); return; }
+      S.settings.keys = Object.assign({}, S.settings.keys); S.settings.keys[aiProv()] = v; S.aiOk = false; S.ai = 'ready';
+      save.settings(); renderTop(); renderDrawer(true); testKey();
+    }
+    else if (act === 'test-key') testKey();
+    else if (act === 'clear-key') { S.settings.keys = Object.assign({}, S.settings.keys); delete S.settings.keys[aiProv()]; S.aiOk = false; S.ai = 'absent'; save.settings(); renderTop(); renderDrawer(true); if (isIdle()) paintIdle(); toast('키를 지웠어요.'); }
+    else if (act === 'save-models') { S.settings.models = Object.assign({}, S.settings.models); S.settings.models[aiProv()] = { quick: (($('#mQuick') || {}).value || '').trim(), deep: (($('#mDeep') || {}).value || '').trim() }; save.settings(); toast('모델 설정을 저장했어요.'); }
+    else if (act === 'scale') { S.settings.scale = Number(t.getAttribute('data-v')) || 1; applyScale(); save.settings(); renderDrawer(true); }
+    else if (act === 'new-meeting' || act === 'clear-log') {
+      if (S.confirm === act) {
+        S.confirm = ''; S.segments = []; S.qaLog = []; S.summary = null;
+        save.segments(); save.qaLog(); kv.set('summary', null);
+        renderCaptions(); renderDrawer(true); toast('자막과 질문 기록을 지웠어요.');
+      } else { arm(act); renderDrawer(true); }
+    }
+    else if (act === 'clear-files') {
+      if (S.confirm === act) {
+        S.confirm = '';
+        S.files.slice().forEach((f) => removeFile(f.id));
+        kv.del('files');
+        S.current = null; refresh(); toast('올린 자료를 모두 지웠어요.');
+      } else { arm(act); renderDrawer(true); }
+    }
+    return;
+  }
+  if (t.hasAttribute('data-open')) { const tab = t.getAttribute('data-open'); if (S.drawer === tab) closeDrawer(); else openDrawer(tab); return; }
+  if (t.hasAttribute('data-tab')) { S.drawer = t.getAttribute('data-tab'); openDrawer(S.drawer); return; }
+  if (t.hasAttribute('data-chunk')) { openReader(t.getAttribute('data-chunk')); return; }
+  if (t.hasAttribute('data-seg')) {
+    const id = Number(t.getAttribute('data-seg'));
+    const i = S.segments.findIndex((s) => s.id === id);
+    if (i >= 0) {
+      const prev = S.segments[i - 1];
+      answer({ question: S.segments[i].text, recent: prev && S.segments[i].t - prev.t < 20000 ? [prev.text] : [] });
+    }
+    return;
+  }
+  if (t.hasAttribute('data-file')) { S.activeFile = t.getAttribute('data-file'); S.confirm = ''; renderMaterials(); }
+});
+$('#dBody').addEventListener('change', (e) => {
+  const t = e.target;
+  if (t && t.name === 'mode') { S.settings.mode = t.value === 'auto' ? 'auto' : 'button'; save.settings(); renderTop(); if (isIdle()) paintIdle(); }
+});
+$('#dBody').addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d || !d.getAttribute) return;
+  const key = d.getAttribute('data-key');
+  if (!key) return;
+  if (d.open) S.openQa.add(key); else S.openQa.delete(key);
+}, true);
+$('#btnMic').addEventListener('click', () => { if (sp.want) micStop(); else micStart(); });
+$('#btnGo').addEventListener('click', () => {
+  if (S.asking && $('#askInput').value.trim()) { submitAsk(); return; }
+  if (S.asking && !sp.want) { submitAsk(); return; }
+  answer({ recent: recentLines(25000, 4) });
+});
+$('#btnType').addEventListener('click', openAsk);
+$('#askClose').addEventListener('click', closeAsk);
+$('#askInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); submitAsk(); }
+  else if (e.key === 'Escape') closeAsk();
+});
+$('#btnFold').addEventListener('click', () => { S.settings.matOpen = !S.settings.matOpen; save.settings(); renderMaterials(); });
+$('#fileInput').addEventListener('change', (e) => { const files = e.target.files; if (files && files.length) addFiles(files); e.target.value = ''; });
+$('#scrim').addEventListener('click', closeDrawer);
+$('#dClose').addEventListener('click', closeDrawer);
+$('#rClose').addEventListener('click', closeReader);
+$('#rPrev').addEventListener('click', () => { if (reader.idx > 0) { reader.idx--; renderReader(); } });
+$('#rNext').addEventListener('click', () => { const f = fileById(reader.fileId); if (f && reader.idx < f.chunks.length - 1) { reader.idx++; renderReader(); } });
+$('#reader').addEventListener('click', (e) => { if (e.target.id === 'reader') closeReader(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if ($('#reader').classList.contains('on')) closeReader();
+  else if (S.drawer) closeDrawer();
+  else if (S.asking) closeAsk();
+});
+const mat = $('#mat');
+['dragenter', 'dragover'].forEach((ev) => mat.addEventListener(ev, (e) => { e.preventDefault(); mat.classList.add('drag'); }));
+['dragleave', 'drop'].forEach((ev) => mat.addEventListener(ev, (e) => { e.preventDefault(); if (ev === 'dragleave' && mat.contains(e.relatedTarget)) return; mat.classList.remove('drag'); }));
+mat.addEventListener('drop', (e) => { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+/* ================= 시작 ================= */
+async function init() {
+  renderMic(); renderCaptions(); renderMaterials(); renderTop(); paintIdle(); applyScale();
+  try {
+    const got = await Promise.all(['files', 'segments', 'qaLog', 'settings', 'summary'].map((k) => kv.get(k)));
+    const files = got[0], segs = got[1], qa = got[2], settings = got[3], summary = got[4];
+    if (settings && typeof settings === 'object') Object.assign(S.settings, settings);
+    if (Array.isArray(files) && !S.files.length) S.files = files.filter((f) => f && Array.isArray(f.chunks) && f.chunks.length).map((f) => Object.assign({}, f, { status: 'ready', study: studyForSave(f.study) }));
+    if (Array.isArray(segs) && !S.segments.length) S.segments = segs.filter((s) => s && s.text).map((s) => ({ id: ++segN, t: s.t, text: s.text }));
+    if (Array.isArray(qa) && !S.qaLog.length) S.qaLog = qa;
+    if (summary && summary.text && !S.summary) S.summary = Object.assign({}, summary, { status: 'done' });
+  } catch (e) {}
+  if (S.files.length && !fileById(S.activeFile)) S.activeFile = S.files[0].id;
+  buildIndex(); buildPrepared();
+  applyScale(); renderMic(); renderCaptions(); refresh();
+  if (isIdle()) paintIdle();
+  getSample().then((s) => { if (s) checkSampleState(false); });
+}
+init();
+})();
+</script>
+</body>
+</html>
