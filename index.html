@@ -410,7 +410,7 @@ const studyForSave = (st) => {
 const fileForSave = (f) => ({ id: f.id, name: f.name, kind: f.kind, size: f.size, addedAt: f.addedAt, warn: f.warn || '', sample: !!f.sample, chunks: f.chunks, study: studyForSave(f.study) });
 const save = {
   files: debounce(() => kv.set('files', readyFiles().map(fileForSave)), 500),
-  segments: debounce(() => kv.set('segments', S.segments.slice(-5000).map((s) => ({ t: s.t, text: s.text }))), 1800),
+  segments: debounce(() => kv.set('segments', S.segments.slice(-5000).map((s) => ({ t: s.t, te: s.te || s.t, text: s.text }))), 1800),
   qaLog: debounce(() => kv.set('qaLog', S.qaLog.slice(-300)), 500),
   settings: debounce(() => kv.set('settings', S.settings), 300),
   summary: debounce(() => kv.set('summary', S.summary && S.summary.status === 'done' ? S.summary : null), 400),
@@ -951,7 +951,7 @@ async function httpErr(res) {
   else if (/credit balance/i.test(all)) code = 'no_credit';
   else if (st === 403 && /model/i.test(msg) && !/API key/i.test(msg)) code = 'bad_model';
   else if (st === 401 || st === 403 || /API key not valid|API_KEY_INVALID|invalid x-api-key|authentication_error/i.test(all)) code = 'bad_key';
-  else if (st === 404 || /is not found|not_found_error/i.test(all)) code = 'bad_model';
+  else if (st === 404 || /is not found|not_found_error|unexpected model|model name|not supported for generateContent|no longer available|has been deprecated/i.test(all)) code = 'bad_model';
   else if (st === 429 || /RESOURCE_EXHAUSTED|rate_limit/i.test(all)) code = 'rate_limited';
   else if (st === 400) code = 'invalid_request';
   return { code, status: st, message: msg.slice(0, 300) };
@@ -998,7 +998,7 @@ async function callGemini(model, tier, input, opts) {
   } catch (e) { throw netErr(e); }
   if (!res.ok) {
     const err = await httpErr(res);
-    if (gen.thinkingConfig && res.status === 400 && /thinking/i.test(err.message)) { noThinking.add(model); return callGemini(model, tier, input, opts); }
+    if (gen.thinkingConfig && res.status === 400) { noThinking.add(model); return callGemini(model, tier, input, opts); }
     throw err;
   }
   let text = '', truncated = false;
@@ -1036,19 +1036,59 @@ async function callClaude(model, tier, input, opts) {
   if (!text.trim()) throw { code: 'empty_completion', message: 'empty' };
   return { text, truncated };
 }
+async function discoverGemini() {
+  let res;
+  try { res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': aiKey() } }); } catch (e) { throw netErr(e); }
+  if (!res.ok) throw await httpErr(res);
+  const j = await res.json();
+  const names = (j.models || []).filter((m) => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0).map((m) => String(m.name || '').replace(/^models\//, ''));
+  const ok = names.filter((n) => /^gemini-/.test(n) && !/(image|tts|audio|live|embedding|vision|robotics|computer|native|exp|learnlm|thinking)/.test(n));
+  const ver = (n) => { const m = n.match(/^gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
+  const stable = (n) => (/preview|latest/.test(n) ? 0 : 1);
+  const rank = (arr) => arr.sort((a, b) => (stable(b) - stable(a)) || (ver(b) - ver(a)) || (a.length - b.length));
+  const lite = rank(ok.filter((n) => /flash-lite/.test(n)));
+  const flash = rank(ok.filter((n) => /flash/.test(n) && !/lite/.test(n)));
+  return { quick: lite.concat(flash).slice(0, 4), deep: flash.concat(lite).slice(0, 4), t: now() };
+}
 async function callAI(input, opts) {
   opts = opts || {};
   const tier = opts.modelTier === 'quick' ? 'quick' : 'deep';
   const prov = aiProv();
-  const run = (m) => (prov === 'claude' ? callClaude : callGemini)(m, tier, input, opts);
-  try {
-    const r = await run(aiCustom(tier) || MODELS[prov][tier]);
-    S.aiOk = true;
-    return r;
-  } catch (e) {
-    if (e && e.code === 'bad_model' && prov === 'gemini' && !aiCustom(tier)) { const r = await run(GEMINI_ALIAS[tier]); S.aiOk = true; return r; }
-    throw e;
+  const custom = aiCustom(tier);
+  const resolved = (S.settings.resolved || {})[prov] || {};
+  let chain;
+  if (custom) chain = [custom];
+  else if (prov === 'gemini') {
+    const d = S.settings.gemDiscover || {};
+    chain = [resolved[tier]].concat(d[tier] || [], [MODELS.gemini[tier], GEMINI_ALIAS[tier]], tier === 'quick' ? [resolved.deep, MODELS.gemini.deep, GEMINI_ALIAS.deep] : []);
+  } else chain = [resolved[tier], MODELS.claude[tier]].concat(tier === 'quick' ? [MODELS.claude.deep] : []);
+  chain = chain.filter((m, i) => m && chain.indexOf(m) === i);
+  let last = null, discovered = false;
+  for (let i = 0; i < chain.length; i++) {
+    const m = chain[i];
+    try {
+      const r = await (prov === 'claude' ? callClaude : callGemini)(m, tier, input, opts);
+      S.aiOk = true;
+      if (!custom && resolved[tier] !== m) {
+        S.settings.resolved = Object.assign({}, S.settings.resolved);
+        const cur = Object.assign({}, S.settings.resolved[prov]); cur[tier] = m; S.settings.resolved[prov] = cur;
+        save.settings();
+      }
+      return r;
+    } catch (e) {
+      if (!e || e.code !== 'bad_model' || custom) throw e;
+      last = e;
+      if (prov === 'gemini' && !discovered && !(S.settings.gemDiscover && now() - (S.settings.gemDiscover.t || 0) < 60000)) {
+        discovered = true;
+        try {
+          S.settings.gemDiscover = await discoverGemini(); save.settings();
+          const add = (S.settings.gemDiscover[tier] || []).filter((x) => chain.indexOf(x) < 0);
+          chain.splice.apply(chain, [i + 1, 0].concat(add));
+        } catch (e2) {}
+      }
+    }
   }
+  throw last || { code: 'bad_model', message: 'no model' };
 }
 function errCopy(e) {
   const c = e && e.code;
@@ -1071,19 +1111,26 @@ function noteSampleError(e) {
 const aiUsable = () => !!aiKey() && S.ai !== 'denied';
 const aiNote = () => (S.ai === 'denied' ? 'API 키가 거절돼 자료 원문으로 보여드려요' : 'API 키가 없어 자료 원문으로 보여드려요');
 let keyTesting = false;
-async function testKey() {
+async function testKey(silent) {
   if (keyTesting) return;
-  if (!aiKey()) { toast('먼저 API 키를 넣어 주세요.'); return; }
+  if (!aiKey()) { if (!silent) toast('먼저 API 키를 넣어 주세요.'); return; }
   keyTesting = true;
-  toast('연결을 확인하는 중이에요.');
+  if (!silent) toast('연결을 확인하는 중이에요. 몇 초 걸려요.');
   try {
     S.ai = 'ready';
+    if (aiProv() === 'gemini') {
+      try { S.settings.gemDiscover = await discoverGemini(); } catch (e) { if (e && (e.code === 'bad_key' || e.code === 'aq_key')) throw e; }
+    }
+    S.settings.resolved = Object.assign({}, S.settings.resolved); S.settings.resolved[aiProv()] = {};
+    save.settings();
     await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'quick' });
-    toast('연결됐어요. 이제 AI가 답을 만들어요.');
+    await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'default' });
+    const r = (S.settings.resolved || {})[aiProv()] || {};
+    if (!silent) toast('연결됐어요. 빠른 답변 ' + (r.quick || '-') + ', 공부 ' + (r.deep || '-'));
     readyFiles().forEach((f) => { const st = f.study && f.study.status; if (!st || st === 'off' || st === 'idle' || st === 'error') queueStudy(f); });
   } catch (e) {
     noteSampleError(e);
-    toast(errCopy(e));
+    if (!silent) toast(errCopy(e));
   } finally {
     keyTesting = false;
     renderTop();
@@ -1268,7 +1315,7 @@ function checkNumbers(answer, ctx) {
 }
 function recentLines(windowMs, max) {
   const t = now();
-  const lines = S.segments.filter((s) => t - s.t <= windowMs).slice(-max).map((s) => s.text);
+  const lines = S.segments.filter((s) => t - (s.te || s.t) <= windowMs).slice(-max).map((s) => s.text);
   if (sp.interim) lines.push(sp.interim);
   return lines;
 }
@@ -1497,13 +1544,14 @@ function spawn() {
       if (!tx) continue;
       if (r.isFinal) {
         let add = tx;
-        if (sp.lastFinal && tx.indexOf(sp.lastFinal) === 0) add = tx.slice(sp.lastFinal.length).trim();
+        const cut = sp.lastFinal ? stripLoose(tx, sp.lastFinal) : null;
+        if (cut !== null) add = cut;
         sp.lastFinal = tx;
         sp.interim = '';
         if (add) addSegment(add);
       } else interim += (interim ? ' ' : '') + tx;
     }
-    if (sp.lastFinal && interim.indexOf(sp.lastFinal) === 0) interim = interim.slice(sp.lastFinal.length).trim();
+    if (sp.lastFinal) { const ci = stripLoose(interim, sp.lastFinal); if (ci !== null) interim = ci; }
     sp.interim = interim;
     sp.fails = 0;
     $('#capInterim').textContent = interim;
@@ -1549,18 +1597,34 @@ function looksLikeQuestion(s) {
   if (Q_END.test(t)) return t.length >= 7 || !/죠\s*$/.test(t);
   return Q_WORD.test(t) && t.length >= 8;
 }
+function stripLoose(tx, prev) {
+  const a = String(tx).replace(/\s+/g, ''), b = String(prev).replace(/\s+/g, '');
+  if (!b || a.indexOf(b) !== 0) return null;
+  let need = b.length, i = 0;
+  while (i < tx.length && need > 0) { if (!/\s/.test(tx[i])) need--; i++; }
+  return tx.slice(i).trim();
+}
+const MERGE_GAP = 2200;
+const SENT_END = /(다|요|죠|까|지|니|냐|니다|세요|네요|군요|지요|나요|가요|[.?!？。])\s*$/;
 function addSegment(text) {
   text = String(text).replace(/\s+/g, ' ').trim();
   if (!text) return;
+  const t = now();
   const last = S.segments[S.segments.length - 1];
-  if (last && last.text === text && now() - last.t < 2500) return;
-  S.segments.push({ id: ++segN, t: now(), text });
-  if (S.segments.length > 5000) S.segments.splice(0, S.segments.length - 5000);
+  const lastAt = last ? (last.te || last.t) : 0;
+  if (last && last.text === text && t - lastAt < 2500) return;
+  if (last && t - lastAt < MERGE_GAP && !SENT_END.test(last.text) && last.text.length + text.length < 180) {
+    last.text = last.text + ' ' + text;
+    last.te = t;
+  } else {
+    S.segments.push({ id: ++segN, t, te: t, text });
+    if (S.segments.length > 5000) S.segments.splice(0, S.segments.length - 5000);
+  }
+  const cur = S.segments[S.segments.length - 1];
   save.segments();
   renderCaptions();
   if (S.drawer === 'log') renderDrawer(true);
-  if (S.settings.mode === 'auto' && sp.want && looksLikeQuestion(text) && readyFiles().length) {
-    const t = now();
+  if (S.settings.mode === 'auto' && sp.want && looksLikeQuestion(cur.text) && readyFiles().length) {
     if (t - sp.lastAuto > 3500) { sp.lastAuto = t; answer({ recent: recentLines(20000, 3) }); }
   }
 }
@@ -1941,7 +2005,7 @@ function settingsHtml() {
   const pn = aiProv() === 'claude' ? 'Claude' : 'Gemini';
   if (!aiKey()) rows.push(['bad', 'AI 답변', '맨 위 AI 연결에 API 키를 넣어 주세요. 지금은 자료 원문만 보여드려요.']);
   else if (S.ai === 'denied') rows.push(['bad', 'AI 답변', '키가 거절됐어요. 맨 위에서 키를 다시 넣어 주세요. 지금은 자료 원문만 보여드려요.']);
-  else if (S.aiOk) rows.push(['ok', 'AI 답변', pn + '에 연결됐어요.']);
+  else if (S.aiOk) { const rv = (S.settings.resolved || {})[aiProv()] || {}; rows.push(['ok', 'AI 답변', pn + '에 연결됐어요. 빠른 답변 ' + escText(rv.quick || '-') + ', 공부 ' + escText(rv.deep || '-')]); }
   else rows.push(['mid', 'AI 답변', pn + ' 키가 저장돼 있어요. ‘연결 확인’으로 시험해 보세요.']);
   if (wake.status === 'on') rows.push(['ok', '화면 꺼짐', '마이크를 켜 둔 동안 화면이 꺼지지 않게 해 두었어요.']);
   else if (wake.status === 'denied' || wake.status === 'unsupported' || wake.status === 'released') rows.push(['mid', '화면 꺼짐', '이 화면에서는 자동으로 막을 수 없어요. 태블릿 설정에서 화면 자동 꺼짐 시간을 길게 바꿔 두세요.']);
@@ -2111,7 +2175,7 @@ async function init() {
     const files = got[0], segs = got[1], qa = got[2], settings = got[3], summary = got[4];
     if (settings && typeof settings === 'object') Object.assign(S.settings, settings);
     if (Array.isArray(files) && !S.files.length) S.files = files.filter((f) => f && Array.isArray(f.chunks) && f.chunks.length).map((f) => Object.assign({}, f, { status: 'ready', study: studyForSave(f.study) }));
-    if (Array.isArray(segs) && !S.segments.length) S.segments = segs.filter((s) => s && s.text).map((s) => ({ id: ++segN, t: s.t, text: s.text }));
+    if (Array.isArray(segs) && !S.segments.length) S.segments = segs.filter((s) => s && s.text).map((s) => ({ id: ++segN, t: s.t, te: s.te || s.t, text: s.text }));
     if (Array.isArray(qa) && !S.qaLog.length) S.qaLog = qa;
     if (summary && summary.text && !S.summary) S.summary = Object.assign({}, summary, { status: 'done' });
   } catch (e) {}
@@ -2120,6 +2184,7 @@ async function init() {
   applyScale(); renderMic(); renderCaptions(); refresh();
   if (isIdle()) paintIdle();
   getSample().then((s) => { if (s) checkSampleState(false); });
+  if (aiKey() && !(((S.settings.resolved || {})[aiProv()] || {}).quick)) testKey(true);
 }
 init();
 })();
