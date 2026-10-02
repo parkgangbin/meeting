@@ -222,13 +222,13 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 .alert-btn{padding:0;border:0;background:none;color:var(--warn);font-size:13px;text-decoration:underline;text-underline-offset:3px}
 .main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(280px,31vw,430px)}
 .main .stage{min-height:0;padding-left:clamp(18px,4vw,64px);padding-right:clamp(18px,3vw,48px)}
-.live{position:relative;min-height:0;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--surface)}
+.livepanel{position:relative;min-height:0;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--surface)}
 .live-head{flex:none;display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:13.5px}
 .live-head strong{font-weight:600;white-space:nowrap}
 .live-state{flex:1;min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .live-dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--faint);transition:transform .15s}
-.live.on .live-dot{background:var(--live)}
-.live.hearing .live-dot{transform:scale(1.5)}
+.livepanel.on .live-dot{background:var(--live)}
+.livepanel.hearing .live-dot{transform:scale(1.5)}
 .live-list{flex:1;min-height:0;overflow-y:auto;padding:8px 6px 18px;font-size:calc(15.5px*var(--scale));line-height:1.55}
 .lv{display:grid;grid-template-columns:auto 1fr;gap:10px;width:100%;padding:6px 8px;border:0;border-radius:8px;background:none;text-align:left;word-break:keep-all;overflow-wrap:anywhere}
 .lv:hover{background:var(--panel)}
@@ -241,7 +241,9 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 .masked{-webkit-text-security:disc}
 .mlabel{display:block;margin-top:10px;font-size:13.5px;color:var(--muted)}
 .mlabel .field{margin-top:6px;color:var(--ink)}
-@media (max-width:900px){.main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(140px,38%)}.live{border-left:0;border-top:1px solid var(--line)}}
+@media (max-width:900px){.main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(140px,38%)}.livepanel{border-left:0;border-top:1px solid var(--line)}}
+.lead-in{color:var(--muted);font-weight:500}
+.lv.ld{box-shadow:inset 3px 0 0 var(--accent)}
 @media (max-width:820px){.top-nav .lbl{display:none}.tbtn{padding:0 10px}}
 @media (max-width:640px){
   .top-status{display:none}
@@ -282,7 +284,7 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
     <div class="cue-aux" id="cueAux"></div>
   </section>
 </main>
-<aside class="live" id="live" aria-label="실시간 자막">
+<aside class="livepanel" id="live" aria-label="실시간 자막">
   <div class="live-head"><span class="live-dot" aria-hidden="true"></span><strong>실시간 자막</strong><span class="live-state" id="liveState">마이크 꺼짐</span><button class="linkbtn" data-open="log">요약 보기</button></div>
   <div class="live-list" id="liveList"></div>
   <button class="live-jump" id="liveJump" hidden>최신 자막으로</button>
@@ -422,7 +424,7 @@ const kv = (() => {
 /* ================= 상태 ================= */
 const S = {
   files: [], segments: [], qaLog: [], summary: null,
-  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {} },
+  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {}, leadIn: true },
   activeFile: null, hits: new Set(), current: null, drawer: null, asking: false,
   ai: 'checking', index: null, prepared: [], chunkMap: new Map(), totalChars: 0,
   openQa: new Set(), confirm: '', lastAsk: null, lastQuery: '',
@@ -1313,6 +1315,26 @@ const hl = (s, sweep) => escText(s).replace(NUM_RE, (m) => (NUM_SKIP.test(m.repl
 function answerPrompt(ctx) {
   const notes = notesText(2600);
   ctx.notes = notes;
+  if (ctx.lead) {
+    let q = '너는 회의 중인 사용자의 말을 이어 주는 프롬프터다. 사용자는 방금 [말머리]까지 말했고, 화면에 뜬 내용을 보며 그 뒤를 바로 이어서 말한다.\n\n' +
+      '규칙\n' +
+      '1. 아래 [자료]와 [공부 노트]에 적힌 내용만 쓴다. 자료로 이어 갈 수 없으면 답변 줄에 "자료에 없음"이라고만 쓴다.\n' +
+      '2. 말머리는 음성 인식이라 오타가 있을 수 있다. 자료에 나오는 말로 바로잡아 이해한다.\n' +
+      '3. 답변 줄에는 말머리를 다시 쓰지 말고, 말머리 바로 뒤에 붙여 읽으면 자연스러운 존댓말 한 문장이 되는 뒷부분만 쓴다. 핵심 숫자를 먼저, 60자 안팎.\n' +
+      '   예) 말머리 "A점 3월 매출은" → 답변 "120억 원으로, 전월보다 5% 늘었습니다."\n' +
+      '4. 숫자, 단위, 고유명사는 자료 표기 그대로 쓴다. 자료의 숫자로 계산했다면 그 값 뒤에 "(계산)"을 붙인다.\n' +
+      '5. 근거 줄에는 실제로 참고한 [자료] 번호만 쓴다.\n\n' +
+      '출력은 아래 세 줄만 쓴다. 다른 말은 쓰지 않는다.\n' +
+      '질문: (바로잡은 말머리)\n' +
+      '답변: (말머리 뒤에 이어 붙일 말)\n' +
+      '근거: (번호를 쉼표로 구분, 없으면 "없음")\n\n';
+    if (notes) q += '[공부 노트]\n' + notes + '\n\n';
+    q += '[자료]\n' + (ctx.items.length ? ctx.items.map((x) => '[' + x.n + '] ' + shortName(x.f.name) + ' ' + x.c.loc + '\n' + x.text).join('\n\n') : '(관련 자료 없음)') + '\n\n';
+    q += '[말머리]\n' + ctx.lead;
+    if (ctx.recent.length) q += '\n\n[직전 대화]\n' + ctx.recent.filter((l) => l !== ctx.lead).slice(-2).map((l) => '- ' + l).join('\n');
+    while (bytes(q) > 240000 && ctx.items.length > 1) { ctx.items.pop(); return answerPrompt(ctx); }
+    return q;
+  }
   let p = '너는 회의 중인 사용자의 답변 프롬프터다. 사용자는 방금 회의에서 질문을 받았고, 네 답을 화면에서 보며 그대로 소리 내어 말한다.\n\n' +
     '규칙\n' +
     '1. 아래 [자료]와 [공부 노트]에 적힌 내용만 근거로 쓴다. 자료에 없는 사실, 숫자, 추측은 절대 쓰지 않는다.\n' +
@@ -1371,14 +1393,16 @@ async function answer(opts) {
   opts = opts || {};
   const explicit = !!(opts.question && opts.question.trim());
   const recent = opts.recent || [];
-  const qText = explicit ? opts.question.trim() : recent.slice(-2).join(' ');
+  const lastLine = explicit ? opts.question.trim() : (recent[recent.length - 1] || '');
+  const lead = opts.lead || (looksLikeLead(lastLine) ? lastLine.trim() : '');
+  const qText = lead || (explicit ? opts.question.trim() : recent.slice(-2).join(' '));
   if (!readyFiles().length) { toast('먼저 회의 자료를 올려 주세요.'); return; }
   if (!qText.trim()) {
     openAsk();
     toast(sp.want ? '아직 들린 말이 없어요. 질문을 입력해도 돼요.' : '들린 질문이 없어요. 마이크를 켜거나 질문을 입력해 주세요.');
     return;
   }
-  S.lastAsk = { question: explicit ? opts.question.trim() : '', recent: recent.slice() };
+  S.lastAsk = { question: explicit ? opts.question.trim() : '', recent: recent.slice(), lead };
   S.lastQuery = qText;
   const seq = ++ansSeq;
   if (ansCtl) { try { ansCtl.abort(); } catch (e) {} }
@@ -1388,9 +1412,9 @@ async function answer(opts) {
   const items = pickContext(qText);
   const top = items.filter((x) => x.s > 0)[0];
   const ctx = {
-    seq, explicit, question: explicit ? opts.question.trim() : '', recent: explicit ? recent.slice(-2) : recent, qText, items, t0,
+    seq, explicit, lead, question: explicit ? opts.question.trim() : '', recent: explicit ? recent.slice(-2) : recent, qText, items, t0,
     ms: null, got: false, note: '',
-    displayQ: explicit ? opts.question.trim() : (recent[recent.length - 1] || ''),
+    displayQ: lead ? lead + ' …' : explicit ? opts.question.trim() : (recent[recent.length - 1] || ''),
     excerpt: top ? { c: top.c, f: top.f, text: bestLines(top.c.text, qText, 2) || top.c.text.slice(0, 160), best: bestLines(top.c.text, qText, 1) } : null,
     prep: matchPrepared(qText),
   };
@@ -1446,7 +1470,7 @@ async function answer(opts) {
   }
 }
 function logQA(ctx, p, kind) {
-  const q = (p && p.q && !ctx.explicit) ? p.q : (ctx.displayQ || ctx.qText);
+  const q = ctx.lead ? ((p && p.q) || ctx.lead).replace(/[.…\s]+$/, '') + ' …' : (p && p.q && !ctx.explicit) ? p.q : (ctx.displayQ || ctx.qText);
   const a = p ? p.a : (ctx.prep ? ctx.prep.p.a : (ctx.excerpt ? ctx.excerpt.text : '자료에서 찾지 못함'));
   const src = p ? p.src.map((n) => ctx.items[n - 1]).filter(Boolean).map((x) => x.c.id) : (ctx.excerpt ? [ctx.excerpt.c.id] : []);
   S.qaLog.push({ t: now(), q, a, kind, src });
@@ -1485,7 +1509,7 @@ function paintIdle() {
     aux = '<p class="cue-sub">브라우저가 마이크를 막고 있어요. 주소창 왼쪽 아이콘을 눌러 권한에서 마이크를 허용한 뒤 새로고침해 주세요. 태블릿 설정의 Chrome 앱 권한에서도 마이크가 허용돼 있어야 해요. 그동안은 질문을 입력하거나 키보드의 마이크(받아쓰기)로 넣을 수 있어요.</p><div class="cue-actions"><button class="btn primary" data-act="ask">질문 입력하기</button></div>';
   } else if (sp.want) {
     a = '듣고 있어요.';
-    aux = '<p class="cue-sub">' + (S.settings.mode === 'auto' ? '질문으로 들리는 말이 나오면 자동으로 답을 띄웁니다. 직접 누르고 싶을 때는 ‘방금 질문에 답하기’를 누르세요.' : '나에게 질문이 오면 ‘방금 질문에 답하기’를 누르세요. 아래 자막에서 문장을 눌러도 그 문장에 답해요.') + '</p>';
+    aux = '<p class="cue-sub">' + (S.settings.mode === 'auto' ? '질문으로 들리는 말이 나오면 자동으로 답을 띄웁니다. 직접 누르고 싶을 때는 ‘방금 질문에 답하기’를 누르세요.' : '나에게 질문이 오면 ‘방금 질문에 답하기’를 누르세요. 아래 자막에서 문장을 눌러도 그 문장에 답해요.') + '</p>' + (S.settings.leadIn !== false ? '<p class="cue-sub">내가 ‘9월 본점 매출은’처럼 말을 꺼내고 잠깐 멈추면, 이어서 말할 내용을 바로 띄워요.</p>' : '');
   } else {
     a = '준비됐어요.';
     aux = '<p class="cue-sub">회의가 시작되면 오른쪽 아래 마이크를 켜 두세요. 나에게 질문이 오면 ‘방금 질문에 답하기’를 누르면 됩니다.' + (studying ? ' AI가 자료를 공부하는 동안에도 질문에 답할 수 있어요.' : '') + '</p>';
@@ -1493,8 +1517,14 @@ function paintIdle() {
   if (!aiKey() && !sp.blocked) aux += '<p class="cue-sub">AI 답변을 쓰려면 설정에서 API 키를 넣어 주세요. 키가 없어도 자료 원문 찾기는 돼요.</p><div class="cue-actions"><button class="btn" data-open="settings">API 키 넣기</button></div>';
   paint({ kind: 'idle', aCls: 'intro', a: escText(a), aux });
 }
+const leadSpan = (t) => '<span class="lead-in">' + escText(t) + '</span> ';
 function paintLoading(ctx) {
   let aux = '';
+  if (ctx.lead) {
+    if (ctx.excerpt) aux += excerptHtml(ctx.excerpt, '자료 원문');
+    paint({ kind: 'loading', q: '', a: leadSpan(ctx.lead) + '<span class="thinking" aria-label="이어 갈 말을 찾는 중"><i></i><i></i><i></i></span>', aux });
+    return;
+  }
   if (ctx.prep) aux += '<div class="excerpt"><span class="excerpt-src">준비 노트의 비슷한 질문: ' + escText(ctx.prep.p.q) + '</span>' + hl(ctx.prep.p.a) + '</div>';
   if (ctx.excerpt) aux += excerptHtml(ctx.excerpt, '자료 원문');
   paint({ kind: 'loading', q: quoteQ(ctx.displayQ), aCls: 'soft', a: '<span class="thinking" aria-hidden="true"><i></i><i></i><i></i></span>자료에서 찾는 중', aux });
@@ -1513,6 +1543,11 @@ function metaHtml(ctx, chips, final) {
 }
 function paintAnswer(ctx, p, final) {
   const chips = p.src.map((n) => ctx.items[n - 1]).filter(Boolean);
+  if (ctx.lead) {
+    const lq = (p.q && p.q.length <= ctx.lead.length + 15) ? p.q.replace(/[.…\s]+$/, '') : ctx.lead;
+    paint({ kind: 'answer', q: '', a: leadSpan(lq) + hl(p.a, final), streaming: !final, meta: metaHtml(ctx, chips, final), aux: '' });
+    return;
+  }
   const q = (!ctx.explicit && p.q) ? p.q : ctx.displayQ;
   paint({ kind: 'answer', q: quoteQ(q), a: hl(p.a, final), streaming: !final, meta: metaHtml(ctx, chips, final), aux: '' });
 }
@@ -1605,6 +1640,7 @@ function spawn() {
     $('#capInterim').textContent = interim;
     toggleCapEmpty();
     liveInterim(interim);
+    considerLead(interim, '', false);
     const box = $('#capLines'); box.scrollTop = box.scrollHeight;
   };
   rec.onerror = (e) => {
@@ -1646,6 +1682,37 @@ function looksLikeQuestion(s) {
   if (Q_END.test(t)) return t.length >= 7 || !/죠\s*$/.test(t);
   return Q_WORD.test(t) && t.length >= 8;
 }
+const LEAD_END = /(은|는|이|가|으로는|로는|에서는|에는|기준으로|말씀드리면|보면|보시면|대해서는|관련해서)$/;
+function materialHits(t) {
+  if (!S.index || !S.index.N) return 0;
+  const seen = new Set(); let n = 0;
+  for (const tok of tokens(t)) {
+    if (seen.has(tok)) continue;
+    seen.add(tok);
+    const d = S.index.df.get(tok) || 0;
+    if (d > 0 && (d < S.index.N || S.index.N <= 2)) n++;
+  }
+  return n;
+}
+function looksLikeLead(s) {
+  const t = String(s || '').trim().replace(/[.,!?？…\s]+$/, '');
+  if (t.length < 4 || t.length > 40 || !LEAD_END.test(t) || looksLikeQuestion(t)) return false;
+  return materialHits(t.replace(LEAD_END, '')) >= 2;
+}
+let leadTimer = 0, leadKey = '', leadAt = 0;
+function considerLead(text, merged, isFinal) {
+  if (S.settings.leadIn === false || !sp.want || !readyFiles().length) return false;
+  let t = String(text || '').trim();
+  if (isFinal && !looksLikeLead(t) && merged && merged !== t) { const tail = merged.slice(-30); if (looksLikeLead(tail)) t = tail.trim(); }
+  if (!looksLikeLead(t)) { if (!isFinal) clearTimeout(leadTimer); return false; }
+  const key = t.replace(/\s+/g, '');
+  if (key === leadKey && now() - leadAt < 20000) return isFinal;
+  const fire = () => { leadKey = key; leadAt = now(); sp.lastAuto = now(); answer({ lead: t, recent: recentLines(20000, 2) }); };
+  clearTimeout(leadTimer);
+  if (isFinal) { fire(); return true; }
+  leadTimer = setTimeout(() => { if ((sp.interim || '').replace(/\s+/g, '') === key) fire(); }, 700);
+  return false;
+}
 function stripLoose(tx, prev) {
   const a = String(tx).replace(/\s+/g, ''), b = String(prev).replace(/\s+/g, '');
   if (!b || a.indexOf(b) !== 0) return null;
@@ -1673,6 +1740,7 @@ function addSegment(text) {
   save.segments();
   renderCaptions();
   if (S.drawer === 'log') renderDrawer(true);
+  if (considerLead(text, cur.text, true)) return;
   if (S.settings.mode === 'auto' && sp.want && looksLikeQuestion(cur.text) && readyFiles().length) {
     if (t - sp.lastAuto > 3500) { sp.lastAuto = t; answer({ recent: recentLines(20000, 3) }); }
   }
@@ -1941,7 +2009,7 @@ function renderLive() {
   const near = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
   const segs = S.segments.slice(-300);
   list.innerHTML = (segs.length
-    ? segs.map((x) => '<button class="lv' + (looksLikeQuestion(x.text) ? ' q' : '') + '" data-seg="' + x.id + '" aria-label="이 문장에 답하기"><span class="t">' + hhmm(x.t) + '</span><span>' + escText(x.text) + '</span></button>').join('')
+    ? segs.map((x) => '<button class="lv' + (looksLikeQuestion(x.text) ? ' q' : looksLikeLead(x.text) ? ' ld' : '') + '" data-seg="' + x.id + '" aria-label="이 문장에 답하기"><span class="t">' + hhmm(x.t) + '</span><span>' + escText(x.text) + '</span></button>').join('')
     : '<p class="live-empty">' + (sp.want ? '말소리가 들리면 여기에 계속 적혀요.' : '마이크를 켜면 들리는 말이 여기에 계속 적혀요. 이 기록으로 나중에 회의 요약을 만들어요.') + '</p>') +
     '<p class="lv-interim" id="liveInterim"></p>';
   $('#liveInterim').textContent = sp.interim || '';
@@ -2070,6 +2138,7 @@ function settingsHtml() {
   let h = aiSettingsHtml() + '<h3>답변 방식</h3>';
   h += opt('button', '버튼을 누를 때만 (추천)', '나에게 온 질문인지는 내가 판단하고 ‘방금 질문에 답하기’를 누릅니다. 이미 지나간 질문에도 답할 수 있어요.');
   h += opt('auto', '질문이 들리면 자동으로', '질문 말투가 들리면 바로 답을 띄웁니다. 다른 사람끼리 주고받는 질문에도 답이 뜰 수 있어요.');
+  h += '<label class="opt"><input type="checkbox" name="leadIn"' + (S.settings.leadIn !== false ? ' checked' : '') + '><span>말머리 이어 주기<small>‘9월 본점 매출은’처럼 내가 말을 꺼내고 잠깐 멈추면, 자료에서 찾아 이어서 말할 내용을 바로 띄워요. 회의 자료에 나오는 말로 시작할 때만 동작해요.</small></span></label>';
   h += '<h3>답변 글자 크기</h3><div class="seg" role="group" aria-label="답변 글자 크기">' +
     [[0.85, '작게'], [1, '보통'], [1.2, '크게']].map((x) => '<button data-act="scale" data-v="' + x[0] + '" aria-pressed="' + (S.settings.scale === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   const rows = [];
@@ -2148,7 +2217,7 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     if (act === 'sample') loadSample();
     else if (act === 'ask') openAsk();
-    else if (act === 'retry') { if (S.lastAsk) answer({ question: S.lastAsk.question, recent: S.lastAsk.recent, fresh: true }); }
+    else if (act === 'retry') { if (S.lastAsk) answer({ question: S.lastAsk.question, recent: S.lastAsk.recent, lead: S.lastAsk.lead, fresh: true }); }
     else if (act === 'rm') {
       const id = t.getAttribute('data-file');
       if (S.confirm === 'rm:' + id) { S.confirm = ''; removeFile(id); } else { arm('rm:' + id); renderMaterials(); }
@@ -2212,6 +2281,7 @@ $('#dBody').addEventListener('change', (e) => {
     toast((tier === 'quick' ? '빠른 답변' : '공부와 요약') + ' 모델: ' + (t.value || '자동'));
     return;
   }
+  if (t && t.name === 'leadIn') { S.settings.leadIn = !!t.checked; save.settings(); toast(t.checked ? '말머리 이어 주기를 켰어요.' : '말머리 이어 주기를 껐어요.'); return; }
   if (t && t.name === 'mode') { S.settings.mode = t.value === 'auto' ? 'auto' : 'button'; save.settings(); renderTop(); if (isIdle()) paintIdle(); }
 });
 $('#dBody').addEventListener('toggle', (e) => {
