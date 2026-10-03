@@ -270,6 +270,9 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 .cue.compact .cue-a{font-size:calc(clamp(20px,1.4vw + 11px,36px)*var(--scale))}
 .cue.compact .cue-q{margin-bottom:.45em;font-size:calc(clamp(14px,.5vw + 11px,18px)*var(--scale))}
 .cue.compact .cue-meta{margin-top:.7em}
+.dim{opacity:.45;pointer-events:none}
+.secure-badge{padding:1px 8px;border-radius:6px;border:1px solid var(--accent);background:none;color:var(--accent);font-size:12px;font-weight:600}
+.cands{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 @media (max-width:820px){.top-nav .lbl{display:none}.tbtn{padding:0 10px}}
 @media (max-width:640px){
   .top-status{display:none}
@@ -292,7 +295,7 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 <body>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트<span class="ver">v8</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트<span class="ver">v10</span></div>
   <div class="top-status" id="topStatus" aria-live="polite"></div>
   <nav class="top-nav" aria-label="패널">
     <button class="tbtn" data-open="notes" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8.5L18 7v13.5H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11h6M9 14.5h6M9 18h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lbl">준비 노트</span></button>
@@ -457,7 +460,7 @@ const kv = (() => {
 /* ================= 상태 ================= */
 const S = {
   files: [], segments: [], qaLog: [], summary: null,
-  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {}, leadIn: true, autoPage: true },
+  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {}, leadIn: true, autoPage: true, secure: false, cloudVoice: false },
   activeFile: null, hits: new Set(), current: null, drawer: null, asking: false,
   ai: 'checking', index: null, prepared: [], chunkMap: new Map(), totalChars: 0,
   openQa: new Set(), confirm: '', lastAsk: null, lastQuery: '', mview: 'cards', pv: null,
@@ -677,7 +680,7 @@ async function parsePdf(file, onProg) {
   }
   const msgs = [];
   if (ocrN) msgs.push('그림이 많은 ' + ocrN + '쪽은 AI가 그림 속 글자까지 읽어 넣었어요. 중요한 숫자는 원본과 한 번 대조해 보세요.');
-  if (empty) msgs.push(empty + '쪽은 글자를 읽지 못했어요.' + (!aiKey() ? ' 설정에서 API 키를 넣고 파일을 다시 올리면 AI가 그림 속 글자도 읽어요.' : ocrErr ? ' AI 판독도 실패했어요: ' + errCopy(ocrErr) : ''));
+  if (empty) msgs.push(empty + '쪽은 글자를 읽지 못했어요.' + (isSecure() ? ' 보안 모드라 그림 속 글자는 읽지 않았어요.' : isGuarded() ? ' 최소 전송 모드라 그림 속 글자는 읽지 않았어요.' : !aiKey() ? ' 설정에서 API 키를 넣고 파일을 다시 올리면 AI가 그림 속 글자도 읽어요.' : ocrErr ? ' AI 판독도 실패했어요: ' + errCopy(ocrErr) : ''));
   return { chunks: out, warn: msgs.join(' ') };
 }
 
@@ -1053,6 +1056,7 @@ const cleanModel = (v, prov) => {
 };
 const aiCustom = (tier) => cleanModel(((S.settings.models || {})[aiProv()] || {})[tier], aiProv());
 function getSample() {
+  if (isSecure()) return Promise.resolve(null);
   if (!aiKey()) { if (S.ai !== 'absent') { S.ai = 'absent'; renderTop(); } return Promise.resolve(null); }
   if (S.ai === 'absent' || S.ai === 'checking') { S.ai = 'ready'; renderTop(); }
   return Promise.resolve(callAI);
@@ -1155,6 +1159,7 @@ async function callClaude(model, tier, input, opts) {
   return { text, truncated };
 }
 async function discoverGemini() {
+  if (isSecure()) throw { code: 'secure', message: 'secure mode' };
   let res;
   try { res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': aiKey() } }); } catch (e) { throw netErr(e); }
   if (!res.ok) throw await httpErr(res);
@@ -1170,6 +1175,8 @@ async function discoverGemini() {
 }
 async function callAIOnce(input, opts) {
   opts = opts || {};
+  if (isSecure()) throw { code: 'secure', message: 'secure mode' };
+  if (isGuarded() && !opts.minimal && !opts.test) throw { code: 'secure', message: 'minimal mode' };
   const tier = opts.modelTier === 'quick' ? 'quick' : 'deep';
   const prov = aiProv();
   const custom = aiCustom(tier);
@@ -1226,6 +1233,7 @@ async function callAI(input, opts) {
 }
 function errCopy(e) {
   const c = e && e.code;
+  if (c === 'secure') return '보안 모드라 AI를 쓰지 않아요';
   if (c === 'bad_key') return 'API 키가 맞지 않아요. 설정에서 키를 다시 넣어 주세요';
   if (c === 'aq_key') return '구글이 이 키(AQ.로 시작)를 거절했어요. AI Studio에서 키를 새로 만들거나 Claude 키를 써 보세요';
   if (c === 'no_credit') return 'Claude API 크레딧이 부족해요. 콘솔에서 결제 정보를 확인해 주세요';
@@ -1242,11 +1250,16 @@ function noteSampleError(e) {
   if (c === 'bad_key' || c === 'aq_key' || c === 'no_credit') S.ai = 'denied';
   renderTop();
 }
-const aiUsable = () => !!aiKey() && S.ai !== 'denied';
-const aiNote = () => (S.ai === 'denied' ? 'API 키가 거절돼 자료 원문으로 보여드려요' : 'API 키가 없어 자료 원문으로 보여드려요');
+const protectMode = () => S.settings.protect || (S.settings.secure ? 'secure' : 'normal');
+const isSecure = () => protectMode() === 'secure';
+const isGuarded = () => protectMode() !== 'normal';
+const aiUsable = () => !isGuarded() && !!aiKey() && S.ai !== 'denied';
+const aiAnswerOK = () => !isSecure() && !!aiKey() && S.ai !== 'denied';
+const aiNote = () => (isSecure() ? '보안 모드: 자료를 밖으로 보내지 않고 이 태블릿 안에서만 찾았어요' : isGuarded() ? '최소 전송 모드: AI 답을 받지 못해 태블릿 안에서 찾은 원문을 보여드려요' : S.ai === 'denied' ? 'API 키가 거절돼 자료 원문으로 보여드려요' : 'API 키가 없어 자료 원문으로 보여드려요');
 let keyTesting = false;
 async function testKey(silent) {
   if (keyTesting) return;
+  if (isSecure()) { if (!silent) toast('보안 모드에서는 AI 연결을 쓰지 않아요.'); return; }
   if (!aiKey()) { if (!silent) toast('먼저 API 키를 넣어 주세요.'); return; }
   keyTesting = true;
   if (!silent) toast('연결을 확인하는 중이에요. 몇 초 걸려요.');
@@ -1257,8 +1270,8 @@ async function testKey(silent) {
     }
     S.settings.resolved = Object.assign({}, S.settings.resolved); S.settings.resolved[aiProv()] = {};
     save.settings();
-    await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'quick' });
-    await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'default' });
+    await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'quick', test: true });
+    await callAI('연결 확인용 요청이다. "확인"이라고만 답하라.', { modelTier: 'default', test: true });
     const r = (S.settings.resolved || {})[aiProv()] || {};
     if (!silent) toast('연결됐어요. 빠른 답변 ' + (r.quick || '-') + ', 공부 ' + (r.deep || '-'));
     readyFiles().forEach((f) => { const st = f.study && f.study.status; if (!st || st === 'off' || st === 'idle' || st === 'error') queueStudy(f); });
@@ -1301,7 +1314,7 @@ const studyQ = [];
 let studyBusy = false;
 function queueStudy(f) {
   if (!f || f.status !== 'ready') return;
-  if (S.ai === 'absent' || S.ai === 'off') { f.study = { status: 'off', facts: [], qa: [] }; refresh(); return; }
+  if (isGuarded() || S.ai === 'absent' || S.ai === 'off') { f.study = { status: 'off', facts: [], qa: [] }; refresh(); return; }
   if (f.study && f.study.ctl) { try { f.study.ctl.abort(); } catch (e) {} }
   f.study = { status: 'queued', overview: '', facts: [], qa: [] };
   if (studyQ.indexOf(f.id) < 0) studyQ.push(f.id);
@@ -1406,6 +1419,26 @@ const NUM_RE = /(\d[\d,]*(?:\.\d+)?(?:\s?(?:%p|%|퍼센트|bp|조|억|만|천|�
 const NUM_SKIP = /^(\d+분기|(?:19|20)\d\d년|\d{1,2}월|\d{1,2}일)$/;
 const hl = (s, sweep) => escText(s).replace(NUM_RE, (m) => (NUM_SKIP.test(m.replace(/\s/g, '')) ? m : '<mark class="hl' + (sweep ? ' sweep' : '') + '">' + m + '</mark>'));
 
+function minimalLines(ctx) {
+  const c = ctx.excerpt.c;
+  const best = (bestLines(c.text, ctx.qText, 2) || ctx.excerpt.text || '').split('\n').filter(Boolean);
+  const lines = [];
+  const hdr = c.text.split('\n').find((l) => /^\[머리행\]/.test(l) || l.indexOf(' | ') >= 0);
+  if (hdr && best.some((b) => b.indexOf(' | ') >= 0) && best.indexOf(hdr) < 0) lines.push('(표 머리행) ' + hdr.replace(/^\[머리행\]\s*/, ''));
+  best.forEach((b) => lines.push(b.replace(/…$/, '')));
+  ctx.sentCount = lines.length;
+  const out = lines.join('\n');
+  return out.length > 500 ? out.slice(0, 500) : out;
+}
+function minimalPrompt(ctx) {
+  const lines = minimalLines(ctx);
+  let p = '너는 회의 중인 사용자의 답변 프롬프터다. 아래 [찾은 내용]은 사용자의 자료에서 찾은 몇 줄이다. 이 내용만 근거로 쓴다. 찾은 내용에 없는 사실이나 숫자는 쓰지 않고, 답할 수 없으면 답변 줄에 "자료에 없음"이라고만 쓴다. 숫자와 단위는 그대로 쓴다.\n';
+  if (ctx.lead) p += '사용자는 방금 [말머리]까지 말했다. 답변 줄에는 말머리를 다시 쓰지 말고, 말머리 뒤에 이어 붙이면 자연스러운 존댓말 한 문장이 되는 뒷부분만 쓴다. "~말씀드리겠습니다"처럼 주제를 알리는 말머리면 이어서 말할 다음 문장을 쓴다.\n';
+  else p += '[받은 질문]에 대한 답을 존댓말 1~2문장으로, 결론부터 쓴다.\n';
+  p += '\n출력은 두 줄만 쓴다.\n질문: (질문이나 말머리를 한 문장으로)\n답변: (답)\n\n[찾은 내용]\n' + lines + '\n\n';
+  p += ctx.lead ? '[말머리]\n' + ctx.lead.slice(0, 120) : '[받은 질문]\n' + String(ctx.explicit ? ctx.question : ctx.qText).slice(0, 160);
+  return p;
+}
 function answerPrompt(ctx) {
   const notes = notesText(2600);
   ctx.notes = notes;
@@ -1519,10 +1552,14 @@ async function answer(opts) {
   const timer = setTimeout(() => { if (seq === ansSeq && !ctx.got) paintFallback(ctx, 'AI 답이 늦어 준비된 내용을 먼저 보여드려요'); }, 4000);
   const sample = await getSample();
   if (seq !== ansSeq) { clearTimeout(timer); return; }
-  if (!sample || !aiUsable()) { clearTimeout(timer); paintFallback(ctx, aiNote()); logQA(ctx, null, 'fallback'); return; }
-  const prompt = answerPrompt(ctx);
+  if (!sample || !aiAnswerOK()) { clearTimeout(timer); paintFallback(ctx, aiNote()); previewFor(top ? top.c.id : null, localTerms(ctx)); logQA(ctx, null, 'fallback'); return; }
+  ctx.minimal = isGuarded();
+  if (ctx.minimal && !ctx.excerpt) { clearTimeout(timer); paintFallback(ctx, '최소 전송 모드: 자료에서 관련 줄을 찾지 못해 AI에 아무것도 보내지 않았어요'); logQA(ctx, null, 'fallback'); return; }
+  const prompt = ctx.minimal ? minimalPrompt(ctx) : answerPrompt(ctx);
+  ctx.sent = true;
   const o = {
     modelTier: 'quick',
+    minimal: !!ctx.minimal,
     signal: ctl.signal,
     onText: (u) => {
       if (seq !== ansSeq) return;
@@ -1569,7 +1606,7 @@ async function answer(opts) {
 function logQA(ctx, p, kind) {
   const q = ctx.lead ? ((p && p.q) || ctx.lead).replace(/[.…\s]+$/, '') + ' …' : (p && p.q && !ctx.explicit) ? p.q : (ctx.displayQ || ctx.qText);
   const a = p ? p.a : (ctx.prep ? ctx.prep.p.a : (ctx.excerpt ? ctx.excerpt.text : '자료에서 찾지 못함'));
-  const src = p ? p.src.map((n) => ctx.items[n - 1]).filter(Boolean).map((x) => x.c.id) : (ctx.excerpt ? [ctx.excerpt.c.id] : []);
+  const src = (ctx.minimal || !p) ? (ctx.excerpt ? [ctx.excerpt.c.id] : []) : p.src.map((n) => ctx.items[n - 1]).filter(Boolean).map((x) => x.c.id);
   S.qaLog.push({ t: now(), q, a, kind, src });
   if (S.qaLog.length > 300) S.qaLog.shift();
   save.qaLog();
@@ -1611,7 +1648,9 @@ function paintIdle() {
     a = '준비됐어요.';
     aux = '<p class="cue-sub">회의가 시작되면 오른쪽 아래 마이크를 켜 두세요. 나에게 질문이 오면 ‘방금 질문에 답하기’를 누르면 됩니다.' + (studying ? ' AI가 자료를 공부하는 동안에도 질문에 답할 수 있어요.' : '') + '</p>';
   }
-  if (!aiKey() && !sp.blocked) aux += '<p class="cue-sub">AI 답변을 쓰려면 설정에서 API 키를 넣어 주세요. 키가 없어도 자료 원문 찾기는 돼요.</p><div class="cue-actions"><button class="btn" data-open="settings">API 키 넣기</button></div>';
+  if (isSecure()) aux += '<p class="cue-sub">보안 모드예요. 자료를 밖으로 보내지 않고 이 태블릿 안에서만 찾아서, 해당 줄과 페이지를 보여줘요.</p>';
+  else if (isGuarded()) aux += '<p class="cue-sub">최소 전송 모드예요. 태블릿 안에서 먼저 찾은 몇 줄과 질문만 AI로 보내 답을 다듬어요.</p>';
+  else if (!aiKey() && !sp.blocked) aux += '<p class="cue-sub">AI 답변을 쓰려면 설정에서 API 키를 넣어 주세요. 키가 없어도 자료 원문 찾기는 돼요.</p><div class="cue-actions"><button class="btn" data-open="settings">API 키 넣기</button></div>';
   paint({ kind: 'idle', aCls: 'intro', a: escText(a), aux });
 }
 const leadSpan = (t) => '<span class="lead-in">' + escText(t) + '</span> ';
@@ -1630,6 +1669,7 @@ function metaHtml(ctx, chips, final) {
   let h = chips.slice(0, 3).map(srcChip).join('');
   if (ctx.ms != null) h += '<span class="meta-txt">' + (ctx.ms / 1000).toFixed(1) + '초</span>';
   if (final && ctx.model) h += '<span class="meta-txt">' + escText(ctx.model) + '</span>';
+  if (final && ctx.minimal && ctx.sent) h += '<span class="meta-txt">질문과 찾은 ' + (ctx.sentCount || 1) + '줄만 보냄</span>';
   if (final) h += '<button class="linkbtn" data-act="retry">다시 찾기</button>';
   if (ctx.note) h += '<span class="warnline">' + escText(ctx.note) + '</span>';
   if (final && ctx.check) {
@@ -1639,7 +1679,7 @@ function metaHtml(ctx, chips, final) {
   return h;
 }
 function paintAnswer(ctx, p, final) {
-  const chips = p.src.map((n) => ctx.items[n - 1]).filter(Boolean);
+  const chips = ctx.minimal && ctx.excerpt ? [{ c: ctx.excerpt.c, f: ctx.excerpt.f }] : p.src.map((n) => ctx.items[n - 1]).filter(Boolean);
   if (ctx.lead) {
     const lq = (p.q && p.q.length <= ctx.lead.length + 15) ? p.q.replace(/[.…\s]+$/, '') : ctx.lead;
     paint({ kind: 'answer', q: '', a: leadSpan(lq) + hl(p.a, final), streaming: !final, meta: metaHtml(ctx, chips, final), aux: '' });
@@ -1653,6 +1693,10 @@ function paintNotFound(ctx) {
   if (ctx.excerpt) aux += excerptHtml(ctx.excerpt, '그나마 가까운 자료');
   paint({ kind: 'notfound', q: quoteQ(ctx.displayQ), aCls: 'soft', a: '올린 자료에서는 답을 찾지 못했어요.', meta: metaHtml(ctx, [], true), aux });
 }
+function candHtml(ctx) {
+  const others = (ctx.items || []).filter((x) => x.s > 0 && (!ctx.excerpt || x.c.id !== ctx.excerpt.c.id)).slice(0, 3);
+  return others.length ? '<div class="cands"><span class="fine">다른 후보</span>' + others.map((x) => '<button class="src" data-chunk="' + escAttr(x.c.id) + '">' + escText(shortName(x.f.name)) + ' ' + escText(x.c.loc) + '</button>').join('') + '</div>' : '';
+}
 function paintFallback(ctx, note) {
   ctx.note = note;
   if (ctx.prep) {
@@ -1664,7 +1708,7 @@ function paintFallback(ctx, note) {
     const one = ctx.excerpt.best || ctx.excerpt.text;
     paint({ kind: 'fallback', q: quoteQ(ctx.displayQ), a: hl(one, true),
       meta: '<span class="meta-txt">자료 원문 그대로</span>' + metaHtml(Object.assign({}, ctx, { ms: null }), [{ c: ctx.excerpt.c, f: ctx.excerpt.f }], true),
-      aux: ctx.excerpt.text !== one ? excerptHtml(ctx.excerpt, '주변 내용') : '' });
+      aux: (ctx.excerpt.text !== one ? excerptHtml(ctx.excerpt, '주변 내용') : '') + candHtml(ctx) });
   } else {
     paint({ kind: 'fallback', q: quoteQ(ctx.displayQ), aCls: 'soft', a: '관련 내용을 자료에서 찾지 못했어요.',
       meta: metaHtml(Object.assign({}, ctx, { ms: null }), [], true),
@@ -1683,6 +1727,27 @@ function micPolicy() {
   try { const p = document.permissionsPolicy || document.featurePolicy; if (p && p.allowsFeature) return p.allowsFeature('microphone'); } catch (e) {}
   return null;
 }
+function odClass() {
+  const a = window.SpeechRecognition, b = window.webkitSpeechRecognition;
+  return (a && typeof a.available === 'function') ? a : (b && typeof b.available === 'function') ? b : null;
+}
+async function ondeviceStatus() {
+  const C = odClass();
+  if (!C) return 'unsupported';
+  try { return String(await C.available({ langs: ['ko-KR'], processLocally: true })); } catch (e) { return 'unsupported'; }
+}
+async function ondeviceReady() {
+  const st = await ondeviceStatus();
+  if (st === 'available') return true;
+  if (st === 'downloadable' || st === 'downloading') {
+    toast('한국어 기기 안 음성 인식 파일을 내려받는 중이에요. 잠시만 기다려 주세요.');
+    try { if (await odClass().install({ langs: ['ko-KR'], processLocally: true })) { toast('준비됐어요. 이제 음성을 태블릿 안에서만 인식해요.'); return true; } } catch (e) {}
+    toast('기기 안 음성 인식을 준비하지 못했어요. 질문을 입력해 주세요.');
+    openAsk(); return false;
+  }
+  toast('이 태블릿은 한국어 기기 안 음성 인식을 지원하지 않아요. 질문을 입력하거나, 설정에서 음성 인식만 구글 사용 허용을 켜 주세요.');
+  openAsk(); return false;
+}
 function micStart() {
   if (!SR) {
     toast('이 브라우저는 음성 인식을 지원하지 않아요. 갤럭시탭은 크롬, 아이패드는 사파리에서 열어 주세요.');
@@ -1690,6 +1755,11 @@ function micStart() {
     return;
   }
   if (micPolicy() === false) { sp.blocked = true; renderMic(); renderCaptions(); if (isIdle()) paintIdle(); else toast('이 화면에서는 마이크가 막혀 있어요. 질문을 입력해 주세요.'); openAsk(); return; }
+  if (isGuarded() && !S.settings.cloudVoice) {
+    ondeviceReady().then((ok) => { if (ok) { sp.local = true; sp.want = true; sp.fails = 0; sp.blocked = false; spawn(); wake.on(); renderMic(); renderCaptions(); if (isIdle()) paintIdle(); } });
+    return;
+  }
+  sp.local = false;
   sp.want = true; sp.fails = 0; sp.blocked = false;
   spawn();
   wake.on();
@@ -1713,6 +1783,7 @@ function spawn() {
   rec.interimResults = true;
   rec.continuous = !WEBKIT_ONLY;
   rec.maxAlternatives = 1;
+  if (sp.local) { try { rec.processLocally = true; } catch (e) {} }
   sp.lastFinal = '';
   sp.lastStart = now();
   rec.onstart = () => { sp.starting = false; sp.running = true; sp.lastStart = now(); renderMic(); renderCaptions(); };
@@ -1876,7 +1947,20 @@ function summaryPrompt(lines, qa) {
     '한 줄 요약:\n(한 문장)\n\n주요 논의:\n- (3~7개)\n\n결정 사항:\n- (없으면 "없음")\n\n할 일:\n- 할 일 / 담당 / 기한 (자막에 없으면 "미정")\n\n나에게 온 질문:\n- 질문 → 참고한 답 (아래 기록 기준, 없으면 "없음")\n\n' +
     '[질문과 답 기록]\n' + (qa || '없음') + '\n\n[회의 자막]\n' + lines;
 }
+function saveTranscript() {
+  if (!S.segments.length) { toast('저장할 자막이 아직 없어요.'); return; }
+  try {
+    const text = S.segments.map((x) => '[' + hhmm(x.t) + '] ' + x.text).join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = '회의자막_' + dateStamp() + '.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    toast('자료 보호 설정 때문에 AI 요약 대신 자막 원문을 파일로 저장했어요.');
+  } catch (e) { toast('저장하지 못했어요.'); }
+}
 async function makeSummary() {
+  if (isGuarded()) { saveTranscript(); return; }
   if (S.segments.length < 3) { toast('요약할 회의 내용이 아직 적어요. 마이크를 켜 두면 자막이 쌓여요.'); return; }
   const sample = await getSample();
   if (!sample || !aiUsable()) { toast(aiNote().replace('자료 원문으로 보여드려요', '요약을 만들 수 없어요')); return; }
@@ -2015,7 +2099,8 @@ function renderTop() {
     const done = ready.length && ready.every((f) => f.study && f.study.status === 'done');
     parts.push('<span>자료 ' + ready.length + '개' + (parsing ? ', 읽는 중' : studying ? ', AI가 공부 중' : done ? ', 공부 완료' : '') + '</span>');
   }
-  if (S.ai === 'absent') parts.push('<button class="alert-btn" data-open="settings">API 키를 넣으면 AI가 답해요</button>');
+  if (isGuarded()) parts.push('<button class="secure-badge" data-open="settings">' + (isSecure() ? '보안 모드' : '최소 전송') + '</button>');
+  else if (S.ai === 'absent') parts.push('<button class="alert-btn" data-open="settings">API 키를 넣으면 AI가 답해요</button>');
   else if (S.ai === 'denied') parts.push('<button class="alert-btn" data-open="settings">API 키를 확인해 주세요</button>');
   if (S.settings.mode === 'auto') parts.push('<span>자동 답변 켜짐</span>');
   $('#topStatus').innerHTML = parts.join('');
@@ -2108,7 +2193,7 @@ function renderCaptions() {
 function renderLive() {
   const box = $('#live'); if (!box) return;
   box.classList.toggle('on', sp.want && sp.running);
-  const st = !SR ? '음성 인식 안 됨' : sp.blocked ? '마이크 막힘' : sp.want ? (sp.running ? '듣는 중' : '연결 중') : '마이크 꺼짐';
+  const st = (!SR ? '음성 인식 안 됨' : sp.blocked ? '마이크 막힘' : sp.want ? (sp.running ? '듣는 중' : '연결 중') : '마이크 꺼짐') + (sp.want && isGuarded() ? (sp.local ? ' (기기 안 인식)' : ' (구글 음성 인식)') : '');
   $('#liveState').textContent = st + (S.segments.length ? ', ' + S.segments.length + '줄 기록' : '');
   const list = $('#liveList');
   const near = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
@@ -2187,6 +2272,12 @@ function renderDrawer(keepScroll) {
   const y = body.scrollTop;
   body.innerHTML = S.drawer === 'notes' ? notesHtml() : S.drawer === 'log' ? logHtml() : settingsHtml();
   body.scrollTop = keepScroll ? y : 0;
+  if (S.drawer === 'settings' && isGuarded()) ondeviceStatus().then((st) => {
+    const el = $('#odState'); if (!el) return;
+    el.textContent = st === 'available' ? '이 태블릿은 한국어 기기 안 음성 인식을 쓸 수 있어요.'
+      : (st === 'downloadable' || st === 'downloading') ? '한국어 기기 안 음성 인식 파일을 받아야 해요. 마이크를 켜면 내려받기를 시작해요.'
+      : '이 태블릿 크롬은 한국어 기기 안 음성 인식을 지원하지 않아요. 지금 설정에서는 질문을 입력하거나, 위 옵션을 켜야 마이크를 쓸 수 있어요.';
+  });
 }
 function srcLink(ids) {
   const x = srcOf(ids)[0];
@@ -2201,7 +2292,7 @@ function notesHtml() {
     if (st.status === 'queued') h += '<p class="muted">공부 순서를 기다리는 중이에요.</p>';
     if (st.status === 'running') h += '<p class="muted">공부하는 중이에요' + (st.parts > 1 ? ' (' + st.part + '/' + st.parts + ')' : '') + '. 보통 1분 안팎 걸리고, 그동안에도 질문에 답할 수 있어요.</p>';
     if (st.status === 'error') h += '<p class="muted">공부하지 못했어요. ' + escText(st.error || '') + '</p>';
-    if (st.status === 'off') h += '<p class="muted">API 키가 없어 공부 노트를 만들 수 없어요. 설정에서 키를 넣으면 공부를 시작해요.</p>';
+    if (st.status === 'off') h += '<p class="muted">' + (isSecure() ? '보안 모드라 AI 공부를 하지 않아요. 자료는 이 태블릿 안에서만 찾아요.' : isGuarded() ? '최소 전송 모드라 AI 공부를 하지 않아요. 자료 전체는 AI로 보내지 않아요.' : 'API 키가 없어 공부 노트를 만들 수 없어요. 설정에서 키를 넣으면 공부를 시작해요.') + '</p>';
     if (st.status === 'idle') h += '<p class="muted">아직 공부하지 않았어요.</p>';
     if (st.overview) h += '<p>' + hl(st.overview) + '</p>';
     if (st.facts && st.facts.length) h += '<h3>핵심 숫자와 사실</h3><ul class="facts">' + st.facts.map((x) => '<li>' + hl(x.text) + srcLink(x.src) + '</li>').join('') + '</ul>';
@@ -2219,14 +2310,14 @@ function notesHtml() {
 }
 function logHtml() {
   const armed = S.confirm === 'new-meeting';
-  let h = '<div class="row"><button class="btn small primary" data-act="summarize"' + (S.summary && S.summary.status === 'running' ? ' disabled' : '') + '>' + (S.summary && S.summary.text ? '요약 다시 만들기' : '회의 요약 만들기') + '</button>' +
+  let h = '<div class="row"><button class="btn small primary" data-act="summarize"' + (S.summary && S.summary.status === 'running' ? ' disabled' : '') + '>' + (isGuarded() ? '자막 파일로 저장' : S.summary && S.summary.text ? '요약 다시 만들기' : '회의 요약 만들기') + '</button>' +
     '<button class="btn small' + (armed ? ' danger' : '') + '" data-act="new-meeting">' + (armed ? '자막과 기록을 지울까요? 한 번 더 누르기' : '새 회의 시작') + '</button></div>';
   h += '<h3>요약</h3>';
   if (S.summary && (S.summary.text || S.summary.status === 'running')) {
     h += '<p class="summary-box" id="sumBox">' + escText(S.summary.text || '요약을 만드는 중이에요. 보통 30초에서 1분 걸려요.') + '</p>';
     if (S.summary.cut) h += '<p class="fine">회의가 길어서 뒷부분 위주로 요약했어요.</p>';
     if (S.summary.status === 'done') h += '<div class="row"><button class="btn small" data-act="copy-summary">복사</button><button class="btn small" data-act="save-summary">파일로 저장</button></div>';
-  } else h += '<p class="muted">회의가 끝나면 자막을 바탕으로 논의, 결정 사항, 할 일을 정리해 드려요.</p>';
+  } else h += '<p class="muted">' + (isGuarded() ? '자료 보호 설정에서는 AI 요약을 만들지 않아요. 자막은 이 태블릿에만 저장되고, 위 버튼으로 파일로 내려받을 수 있어요.' : '회의가 끝나면 자막을 바탕으로 논의, 결정 사항, 할 일을 정리해 드려요.') + '</p>';
   if (S.summary && S.summary.status === 'error') h += '<p class="muted">' + escText(S.summary.error || '') + '</p>';
   h += '<h3>받은 질문과 답 ' + S.qaLog.length + '개</h3>';
   h += S.qaLog.length ? S.qaLog.slice().reverse().map((x) => {
@@ -2237,10 +2328,23 @@ function logHtml() {
   h += S.segments.length ? '<div class="transcript">' + S.segments.slice(-400).map((s) => '<div><span class="t">' + hhmm(s.t) + '</span>' + escText(s.text) + '</div>').join('') + '</div>' : '<p class="muted">마이크를 켜면 회의 자막이 쌓여요.</p>';
   return h;
 }
+function protectHtml() {
+  const pm = protectMode();
+  const opt = (v, title, sub) => '<label class="opt"><input type="radio" name="protect" value="' + v + '"' + (pm === v ? ' checked' : '') + '><span>' + title + '<small>' + sub + '</small></span></label>';
+  let h = '<h3>자료 보호</h3>' +
+    opt('normal', '보통', 'AI가 자료 전체를 공부하고 문장으로 답해요. 가장 똑똑하지만 자료 내용이 AI로 보내져요.') +
+    opt('minimal', '최소 전송', '태블릿 안에서 먼저 찾은 1~3줄과 질문만 AI로 보내 문장으로 다듬어요. 자료 전체, 페이지 이미지, 파일 이름, 회의 자막은 보내지 않아요.') +
+    opt('secure', '보안 (전송 없음)', '아무것도 보내지 않아요. 태블릿 안에서 찾은 원문 줄과 페이지만 보여줘요.');
+  if (pm !== 'normal') {
+    h += '<label class="opt"><input type="checkbox" name="cloudVoice"' + (S.settings.cloudVoice ? ' checked' : '') + '><span>음성 인식만 구글 사용 허용<small>끄면 태블릿 안에서 처리하는 음성 인식만 써요. 그 기능이 안 되는 태블릿에서는 마이크 대신 질문을 입력해야 해요. 켜면 회의 음성이 구글 음성 인식으로 가요.</small></span></label>';
+    h += '<p class="fine" id="odState">기기 안 음성 인식을 확인하고 있어요.</p>';
+  }
+  return h;
+}
 function settingsHtml() {
   const m = S.settings.mode;
   const opt = (v, title, sub) => '<label class="opt"><input type="radio" name="mode" value="' + v + '"' + (m === v ? ' checked' : '') + '><span>' + title + '<small>' + sub + '</small></span></label>';
-  let h = aiSettingsHtml() + '<h3>답변 방식</h3>';
+  let h = protectHtml() + (isSecure() ? '<div class="dim">' + aiSettingsHtml() + '</div>' : aiSettingsHtml()) + '<h3>답변 방식</h3>';
   h += opt('button', '버튼을 누를 때만 (추천)', '나에게 온 질문인지는 내가 판단하고 ‘방금 질문에 답하기’를 누릅니다. 이미 지나간 질문에도 답할 수 있어요.');
   h += opt('auto', '질문이 들리면 자동으로', '질문 말투가 들리면 바로 답을 띄웁니다. 다른 사람끼리 주고받는 질문에도 답이 뜰 수 있어요.');
   h += '<label class="opt"><input type="checkbox" name="leadIn"' + (S.settings.leadIn !== false ? ' checked' : '') + '><span>말머리 이어 주기<small>‘9월 본점 매출은’처럼 내가 말을 꺼내고 잠깐 멈추면, 자료에서 찾아 이어서 말할 내용을 바로 띄워요. 회의 자료에 나오는 말로 시작할 때만 동작해요.</small></span></label>';
@@ -2299,6 +2403,14 @@ function applyMatView() {
 }
 function numTerms(a) {
   return (String(a || '').match(/\d[\d,]*(?:\.\d+)?%?/g) || []).filter((x) => x.replace(/\D/g, '').length >= 2 || /[.%]/.test(x)).slice(0, 8);
+}
+function queryWords(q) {
+  const STOP = /^(얼마|얼마나|어떻게|무엇|뭐|몇|그럼|혹시|지금|우리|이번|그거|이거|정도|관련|대해|말씀|어떤|있나요|인가요|되나요|됐나요|했나요|말씀드리겠습니다)$/;
+  return String(q || '').split(/[\s,.?!…]+/).map((w) => w.replace(/(으로는|에서는|으로|에서|에는|이랑|하고|까지|부터|은|는|이|가|을|를|의|에|도|만|요|로)$/, ''))
+    .filter((w) => w.length >= 2 && !STOP.test(w)).sort((a, b) => b.length - a.length).slice(0, 3);
+}
+function localTerms(ctx) {
+  return numTerms(ctx.excerpt ? (ctx.excerpt.best || ctx.excerpt.text) : '').concat(queryWords(ctx.lead || ctx.qText));
 }
 function previewFor(chunkId, terms, force) {
   const hit = chunkId ? S.chunkMap.get(chunkId) : null;
@@ -2538,6 +2650,20 @@ $('#dBody').addEventListener('change', (e) => {
     toast((tier === 'quick' ? '빠른 답변' : '공부와 요약') + ' 모델: ' + (t.value || '자동'));
     return;
   }
+  if (t && t.name === 'protect') {
+    const v = t.value === 'secure' ? 'secure' : t.value === 'minimal' ? 'minimal' : 'normal';
+    S.settings.protect = v; S.settings.secure = v === 'secure'; save.settings();
+    if (sp.want) micStop();
+    if (v !== 'normal') {
+      if (ansCtl) { try { ansCtl.abort(); } catch (e2) {} }
+      studyQ.length = 0;
+      S.files.forEach((f) => { if (f.study && f.study.ctl) { try { f.study.ctl.abort(); } catch (e2) {} } if (f.study && (f.study.status === 'queued' || f.study.status === 'running')) f.study = { status: 'off', facts: [], qa: [] }; });
+      toast(v === 'secure' ? '보안 모드: 이제 아무것도 이 태블릿 밖으로 보내지 않아요.' : '최소 전송: 질문과 태블릿에서 찾은 몇 줄만 AI로 보내요.');
+    } else { S.ai = aiKey() ? 'ready' : 'absent'; toast('보통 모드로 바꿨어요. AI가 자료 전체를 써요.'); }
+    renderTop(); renderMaterials(); renderDrawer(true); renderCaptions(); if (isIdle()) paintIdle();
+    return;
+  }
+  if (t && t.name === 'cloudVoice') { S.settings.cloudVoice = !!t.checked; save.settings(); if (sp.want) micStop(); toast(t.checked ? '음성 인식에 구글을 쓰도록 허용했어요.' : '음성은 태블릿 안 인식만 써요.'); renderDrawer(true); return; }
   if (t && t.name === 'leadIn') { S.settings.leadIn = !!t.checked; save.settings(); toast(t.checked ? '말머리 이어 주기를 켰어요.' : '말머리 이어 주기를 껐어요.'); return; }
   if (t && t.name === 'mode') { S.settings.mode = t.value === 'auto' ? 'auto' : 'button'; save.settings(); renderTop(); if (isIdle()) paintIdle(); }
 });
