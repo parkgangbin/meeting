@@ -245,6 +245,31 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 .lead-in{color:var(--muted);font-weight:500}
 .lv.ld{box-shadow:inset 3px 0 0 var(--accent)}
 .ver{margin-left:2px;padding:1px 6px;border-radius:5px;border:1px solid var(--line);color:var(--muted);font-size:11px;font-weight:500}
+.mview button{height:34px;padding:0 12px;font-size:13px}
+.mview[hidden]{display:none}
+.pageview{display:none;position:relative;flex:1;min-height:0;margin:0 clamp(12px,2vw,24px) 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.mat.pv .pageview{display:block}
+.mat.pv .cards{display:none}
+.mat.closed .pageview{display:none}
+.mat.expanded{height:46%;max-height:none;min-height:220px}
+@media (max-aspect-ratio:1/1){.mat.expanded{height:50%}}
+.pv-body{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;overflow:auto;padding:8px}
+.pv-body canvas{display:block;margin:auto;flex:none;box-shadow:0 0 0 1px var(--line);cursor:zoom-in}
+.pv-text{align-self:stretch;width:100%;max-width:900px;margin:0 auto;padding:48px 18px 18px;white-space:pre-line;font-size:calc(15px*var(--scale));line-height:1.7;word-break:keep-all;overflow-wrap:anywhere}
+.pv-hint{margin:0 0 10px;color:var(--muted);font-size:13px;white-space:normal}
+.pv-msg{color:var(--muted);font-size:14px}
+.pv-tools{position:absolute;top:8px;right:8px;z-index:2;display:flex;align-items:center;gap:6px;padding:4px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+.pv-tools .iconbtn{width:36px;height:36px}
+.pv-label{max-width:min(46vw,420px);padding:0 6px;overflow:hidden;color:var(--muted);font-size:12.5px;text-overflow:ellipsis;white-space:nowrap}
+.pvfull{position:fixed;top:0;left:0;right:0;bottom:0;z-index:55;display:none;flex-direction:column;background:var(--bg);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.pvfull.on{display:flex}
+.pvf-head{flex:none;display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:600;font-size:15px}
+.pvf-head span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pvf-body{flex:1;min-height:0;overflow:auto;padding:12px;display:flex;justify-content:center;align-items:flex-start}
+.pvf-body canvas{box-shadow:0 0 0 1px var(--line)}
+.cue.compact .cue-a{font-size:calc(clamp(20px,1.4vw + 11px,36px)*var(--scale))}
+.cue.compact .cue-q{margin-bottom:.45em;font-size:calc(clamp(14px,.5vw + 11px,18px)*var(--scale))}
+.cue.compact .cue-meta{margin-top:.7em}
 @media (max-width:820px){.top-nav .lbl{display:none}.tbtn{padding:0 10px}}
 @media (max-width:640px){
   .top-status{display:none}
@@ -267,7 +292,7 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 <body>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트<span class="ver">v7</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트<span class="ver">v8</span></div>
   <div class="top-status" id="topStatus" aria-live="polite"></div>
   <nav class="top-nav" aria-label="패널">
     <button class="tbtn" data-open="notes" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8.5L18 7v13.5H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11h6M9 14.5h6M9 18h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lbl">준비 노트</span></button>
@@ -314,10 +339,15 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 <section class="mat" id="mat" aria-label="회의 자료">
   <div class="mat-bar">
     <div class="tabs" id="tabs" role="tablist" aria-label="올린 자료"></div>
+    <div class="seg mview" id="mview" role="group" aria-label="자료 보기 방식" hidden><button data-mview="page" aria-pressed="false">페이지</button><button data-mview="cards" aria-pressed="true">카드</button></div>
     <label class="btn small" for="fileInput"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>자료 추가</label>
     <button class="btn small" id="btnFold" aria-expanded="true">접기</button>
   </div>
   <div class="cards" id="cards"></div>
+  <div class="pageview" id="pageView">
+    <div class="pv-body" id="pvBody"></div>
+    <div class="pv-tools"><span class="pv-label" id="pvLabel"></span><button class="iconbtn" id="pvPrev" aria-label="이전 쪽"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="iconbtn" id="pvNext" aria-label="다음 쪽"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="iconbtn" id="pvFull" aria-label="크게 보기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+  </div>
   <input class="sr" type="file" id="fileInput" multiple tabindex="-1" accept=".pdf,.pptx,.xlsx,.xlsm,.xls,.csv,.txt,.md,.docx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
 </section>
 
@@ -344,6 +374,7 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
   </div>
 </div>
 
+<div class="pvfull" id="pvOverlay" role="dialog" aria-modal="true" aria-label="페이지 크게 보기"><div class="pvf-head"><span id="pvfLabel"></span><button class="iconbtn" id="pvfClose" aria-label="닫기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><div class="pvf-body" id="pvfBody"></div></div>
 <div class="toastwrap"><div class="toast" id="toast" role="status"></div></div>
 
 <script>
@@ -415,6 +446,7 @@ const kv = (() => {
       try { await run('readwrite', (st) => st.put(v, k)); return true; }
       catch (e) { try { localStorage.setItem(lsKey(k), JSON.stringify(v)); return true; } catch (e2) { this.ok = false; return false; } }
     },
+    async setBin(k, v) { try { await run('readwrite', (st) => st.put(v, k)); return true; } catch (e) { return false; } },
     async del(k) {
       try { await run('readwrite', (st) => st.delete(k)); } catch (e) {}
       try { localStorage.removeItem(lsKey(k)); } catch (e) {}
@@ -425,10 +457,10 @@ const kv = (() => {
 /* ================= 상태 ================= */
 const S = {
   files: [], segments: [], qaLog: [], summary: null,
-  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {}, leadIn: true },
+  settings: { mode: 'button', scale: 1, matOpen: true, provider: 'gemini', keys: {}, models: {}, leadIn: true, autoPage: true },
   activeFile: null, hits: new Set(), current: null, drawer: null, asking: false,
   ai: 'checking', index: null, prepared: [], chunkMap: new Map(), totalChars: 0,
-  openQa: new Set(), confirm: '', lastAsk: null, lastQuery: '',
+  openQa: new Set(), confirm: '', lastAsk: null, lastQuery: '', mview: 'cards', pv: null,
 };
 let segN = 0;
 const readyFiles = () => S.files.filter((f) => f.status === 'ready');
@@ -439,7 +471,7 @@ const studyForSave = (st) => {
   if (s.status === 'running' || s.status === 'queued') s.status = (s.facts.length || s.qa.length) ? 'done' : 'idle';
   return s;
 };
-const fileForSave = (f) => ({ id: f.id, name: f.name, kind: f.kind, size: f.size, addedAt: f.addedAt, warn: f.warn || '', sample: !!f.sample, chunks: f.chunks, study: studyForSave(f.study) });
+const fileForSave = (f) => ({ id: f.id, name: f.name, kind: f.kind, size: f.size, addedAt: f.addedAt, warn: f.warn || '', sample: !!f.sample, hasPdf: !!f.hasPdf, chunks: f.chunks, study: studyForSave(f.study) });
 const save = {
   files: debounce(() => kv.set('files', readyFiles().map(fileForSave)), 500),
   segments: debounce(() => kv.set('segments', S.segments.slice(-5000).map((s) => ({ t: s.t, te: s.te || s.t, text: s.text }))), 1800),
@@ -1482,6 +1514,7 @@ async function answer(opts) {
     prep: matchPrepared(qText),
   };
   paintLoading(ctx);
+  previewFor(top ? top.c.id : null, []);
   markHits(items.filter((x) => x.s > 0).slice(0, 3).map((x) => x.c.id));
   const timer = setTimeout(() => { if (seq === ansSeq && !ctx.got) paintFallback(ctx, 'AI 답이 늦어 준비된 내용을 먼저 보여드려요'); }, 4000);
   const sample = await getSample();
@@ -1514,6 +1547,7 @@ async function answer(opts) {
     paintAnswer(ctx, p, true);
     const used = p.src.map((n) => ctx.items[n - 1]).filter(Boolean).map((x) => x.c.id);
     if (used.length) markHits(used);
+    previewFor(used[0] || (top ? top.c.id : null), numTerms(p.a));
     logQA(ctx, p, 'ai');
   } catch (e) {
     clearTimeout(timer);
@@ -1909,6 +1943,7 @@ async function addFiles(list) {
       f.warn = res.warn || '';
       if (!f.chunks.length) throw new Error('empty');
       f.status = 'ready';
+      if (kind === 'pdf') { try { f.hasPdf = await kv.setBin('pdf:' + f.id, await readAB(file)); } catch (e) { f.hasPdf = false; } }
       buildIndex(); buildPrepared(); save.files();
       refresh();
       queueStudy(f);
@@ -1928,6 +1963,8 @@ function removeFile(id) {
   if (i < 0) return;
   const f = S.files[i];
   if (f.study && f.study.ctl) { try { f.study.ctl.abort(); } catch (e) {} }
+  kv.del('pdf:' + id); dropPdf(id);
+  if (S.pv && S.pv.fileId === id) S.pv = null;
   f.study = null;
   S.files.splice(i, 1);
   const qi = studyQ.indexOf(id); if (qi >= 0) studyQ.splice(qi, 1);
@@ -2002,6 +2039,7 @@ function renderMaterials() {
   if (!S.files.length) {
     tabs.innerHTML = '';
     cards.innerHTML = '<div class="mat-empty"><span>회의 자료를 여기에 올려 주세요. PDF, PPTX, XLSX, CSV, DOCX, TXT</span><label class="btn small primary" for="fileInput">자료 올리기</label><button class="btn small" data-act="sample">샘플 자료로 해 보기</button></div>';
+    S.pv = null; applyMatView();
     return;
   }
   if (!fileById(S.activeFile)) S.activeFile = S.files[0].id;
@@ -2015,6 +2053,7 @@ function renderMaterials() {
       (on ? '<button class="x' + (armed ? ' arm' : '') + '" data-act="rm" data-file="' + f.id + '" aria-label="' + escAttr(f.name) + ' 목록에서 빼기">' + (armed ? '빼기' : ICON.x) + '</button>' : '') + '</div>';
   }).join('');
   renderCards();
+  applyMatView();
 }
 function renderCards() {
   const f = fileById(S.activeFile), cards = $('#cards');
@@ -2229,6 +2268,157 @@ function settingsHtml() {
   return h;
 }
 
+/* 근거 페이지 보기 */
+const pdfDocs = new Map();
+function dropPdf(id) { const pr = pdfDocs.get(id); if (!pr) return; pdfDocs.delete(id); pr.then((d) => { try { if (d) d.destroy(); } catch (e) {} }).catch(() => {}); }
+function getPdfDoc(id) {
+  if (pdfDocs.has(id)) return pdfDocs.get(id);
+  const pr = (async () => {
+    const buf = await kv.get('pdf:' + id);
+    if (!buf || !buf.byteLength) return null;
+    await needLib('pdf');
+    return pdfjsLib.getDocument({ data: new Uint8Array(buf.slice(0)), isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise;
+  })().catch(() => null);
+  pdfDocs.set(id, pr);
+  if (pdfDocs.size > 2) dropPdf(pdfDocs.keys().next().value);
+  return pr;
+}
+const pageOf = (loc) => { const m = /^p\.(\d+)/.exec(String(loc || '')); return m ? Number(m[1]) : 0; };
+const pvShown = () => !!(S.pv && S.mview === 'page' && S.settings.matOpen && fileById(S.pv.fileId));
+let pvWasOn = false;
+function applyMatView() {
+  const on = pvShown();
+  const mat = $('#mat');
+  mat.classList.toggle('pv', on);
+  mat.classList.toggle('expanded', on);
+  $('#mview').hidden = !S.pv || !S.files.length;
+  $$('#mview button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-mview') === (on ? 'page' : 'cards'))));
+  cueEls.box.classList.toggle('compact', on);
+  if (on && !pvWasOn) requestAnimationFrame(() => renderPv());
+  pvWasOn = on;
+}
+function numTerms(a) {
+  return (String(a || '').match(/\d[\d,]*(?:\.\d+)?%?/g) || []).filter((x) => x.replace(/\D/g, '').length >= 2 || /[.%]/.test(x)).slice(0, 8);
+}
+function previewFor(chunkId, terms, force) {
+  const hit = chunkId ? S.chunkMap.get(chunkId) : null;
+  if (!hit) return;
+  S.pv = { chunkId, fileId: hit.f.id, pn: pageOf(hit.c.loc), idx: hit.f.chunks.indexOf(hit.c), terms: terms || [], total: 0 };
+  S.mview = 'page';
+  const was = pvWasOn;
+  applyMatView();
+  if (pvShown() && was) renderPv();
+}
+function openSource(chunkId) {
+  if (S.drawer) closeDrawer();
+  if ($('#reader').classList.contains('on')) closeReader();
+  if (!S.settings.matOpen) { S.settings.matOpen = true; save.settings(); renderMaterials(); }
+  previewFor(chunkId, S.pv && S.pv.chunkId === chunkId ? S.pv.terms : [], true);
+}
+async function drawPdfPage(pdf, pn, canvas, cssW, cssH, terms, zoomCap) {
+  const page = await pdf.getPage(pn);
+  const v1 = page.getViewport({ scale: 1 });
+  const sc = Math.min(cssW / v1.width, (cssH / v1.height) * (zoomCap || 1));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const vp = page.getViewport({ scale: sc * dpr });
+  canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+  canvas.style.width = Math.floor(v1.width * sc) + 'px'; canvas.style.height = Math.floor(v1.height * sc) + 'px';
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  const keys = (terms || []).map((x) => String(x).replace(/[\s,]/g, '')).filter(Boolean);
+  let mark = null;
+  if (keys.length) {
+    try {
+      const tc = await page.getTextContent();
+      g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(255, 214, 10, 0.6)';
+      for (const it of tc.items) {
+        if (!it || !it.str) continue;
+        const n = it.str.replace(/[\s,]/g, '');
+        if (!keys.some((k) => n.indexOf(k) >= 0)) continue;
+        const t = pdfjsLib.Util.transform(vp.transform, it.transform);
+        const h = Math.hypot(t[2], t[3]);
+        g.fillRect(t[4] - 2 * dpr, t[5] - h - dpr, (it.width || 0) * vp.scale + 4 * dpr, h + 3 * dpr);
+        if (!mark) mark = { x: t[4] / dpr, y: (t[5] - h) / dpr };
+      }
+      g.restore();
+    } catch (e) {}
+  }
+  return { total: pdf.numPages, mark };
+}
+function markTerms(html, terms) {
+  let out = html;
+  (terms || []).forEach((t) => { const re = new RegExp(String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); out = out.replace(re, '<mark class="hl">$&</mark>'); });
+  return out;
+}
+let pvSeq = 0;
+async function renderPv() {
+  if (!pvShown()) return;
+  const seq = ++pvSeq;
+  const pv = S.pv, f = fileById(pv.fileId), body = $('#pvBody');
+  if (f.kind === 'pdf' && f.hasPdf && pv.pn) {
+    $('#pvLabel').textContent = shortName(f.name) + '  p.' + pv.pn + (pv.total ? ' / ' + pv.total : '');
+    if (!body.querySelector('canvas')) body.innerHTML = '<p class="pv-msg">페이지를 불러오는 중이에요</p>';
+    const pdf = await getPdfDoc(f.id);
+    if (seq !== pvSeq) return;
+    if (pdf) {
+      try {
+        const cv = document.createElement('canvas');
+        const res = await drawPdfPage(pdf, pv.pn, cv, Math.max(120, body.clientWidth - 16), Math.max(100, body.clientHeight - 16), pv.terms, 2.2);
+        if (seq !== pvSeq) return;
+        const total = res.total;
+        pv.total = total;
+        body.innerHTML = ''; body.appendChild(cv);
+        body.scrollTop = res.mark ? Math.max(0, res.mark.y - body.clientHeight / 3) : 0;
+        body.scrollLeft = res.mark ? Math.max(0, res.mark.x - body.clientWidth / 3) : 0;
+        $('#pvLabel').textContent = shortName(f.name) + '  p.' + pv.pn + ' / ' + total;
+        $('#pvPrev').disabled = pv.pn <= 1; $('#pvNext').disabled = pv.pn >= total;
+        return;
+      } catch (e) {}
+    }
+  }
+  const ch = f.chunks[pv.idx];
+  if (!ch) { body.innerHTML = ''; return; }
+  $('#pvLabel').textContent = shortName(f.name) + '  ' + ch.loc;
+  let html = markTerms(escText(ch.text), pv.terms);
+  const best = S.lastQuery ? bestLines(ch.text, S.lastQuery, 3) : '';
+  if (best) best.split('\n').forEach((ln) => { const raw = ln.replace(/…$/, ''); if (raw.length > 3 && html.indexOf(escText(raw)) >= 0) html = html.split(escText(raw)).join('<mark class="ln">' + escText(raw) + '</mark>'); });
+  body.innerHTML = '<div class="pv-text">' + (f.kind === 'pdf' && !f.hasPdf && !f.sample ? '<p class="pv-hint">이 PDF를 다시 올리면 실제 페이지 그림으로 볼 수 있어요.</p>' : '') + html + '</div>';
+  $('#pvPrev').disabled = pv.idx <= 0; $('#pvNext').disabled = pv.idx >= f.chunks.length - 1;
+}
+function pvStep(d) {
+  const pv = S.pv; if (!pv) return;
+  const f = fileById(pv.fileId); if (!f) return;
+  if (f.kind === 'pdf' && f.hasPdf && pv.pn) {
+    const n = pv.pn + d;
+    if (n < 1 || (pv.total && n > pv.total)) return;
+    pv.pn = n;
+    const ci = f.chunks.findIndex((c) => pageOf(c.loc) === n);
+    if (ci >= 0) { pv.idx = ci; pv.chunkId = f.chunks[ci].id; }
+  } else {
+    const n = pv.idx + d;
+    if (n < 0 || n >= f.chunks.length) return;
+    pv.idx = n; pv.chunkId = f.chunks[n].id; pv.pn = pageOf(f.chunks[n].loc);
+  }
+  renderPv();
+}
+async function openPvFull() {
+  const pv = S.pv; if (!pv) return;
+  const f = fileById(pv.fileId); if (!f) return;
+  if (!(f.kind === 'pdf' && f.hasPdf && pv.pn)) { const ch = f.chunks[pv.idx]; if (ch) openReader(ch.id); return; }
+  const ov = $('#pvOverlay'), body = $('#pvfBody');
+  $('#pvfLabel').textContent = shortName(f.name) + '  p.' + pv.pn;
+  body.innerHTML = '<p class="pv-msg">크게 불러오는 중이에요</p>';
+  ov.classList.add('on');
+  const pdf = await getPdfDoc(f.id);
+  if (!pdf) return;
+  const cv = document.createElement('canvas');
+  const res = await drawPdfPage(pdf, pv.pn, cv, Math.min(body.clientWidth - 24, 1800), 100000, pv.terms);
+  body.innerHTML = ''; body.appendChild(cv);
+  if (res.mark) body.scrollTop = Math.max(0, res.mark.y - body.clientHeight / 3);
+  try { $('#pvfClose').focus(); } catch (e) {}
+}
+
 /* 원문 보기 */
 const reader = { fileId: null, idx: 0, opener: null };
 function openReader(chunkId) {
@@ -2276,7 +2466,7 @@ function arm(key) {
 
 /* ================= 이벤트 ================= */
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-act],[data-chunk],[data-file],[data-seg],[data-open],[data-tab]');
+  const t = e.target.closest('[data-act],[data-chunk],[data-file],[data-seg],[data-open],[data-tab],[data-mview]');
   if (!t) return;
   const act = t.getAttribute('data-act');
   if (act) {
@@ -2323,7 +2513,8 @@ document.addEventListener('click', (e) => {
   }
   if (t.hasAttribute('data-open')) { const tab = t.getAttribute('data-open'); if (S.drawer === tab) closeDrawer(); else openDrawer(tab); return; }
   if (t.hasAttribute('data-tab')) { S.drawer = t.getAttribute('data-tab'); openDrawer(S.drawer); return; }
-  if (t.hasAttribute('data-chunk')) { openReader(t.getAttribute('data-chunk')); return; }
+  if (t.hasAttribute('data-mview')) { const v = t.getAttribute('data-mview'); S.mview = v; applyMatView(); return; }
+  if (t.hasAttribute('data-chunk')) { openSource(t.getAttribute('data-chunk')); return; }
   if (t.hasAttribute('data-seg')) {
     const id = Number(t.getAttribute('data-seg'));
     const i = S.segments.findIndex((s) => s.id === id);
@@ -2364,6 +2555,12 @@ $('#btnGo').addEventListener('click', () => {
   answer({ recent: recentLines(25000, 4) });
 });
 $('#btnType').addEventListener('click', openAsk);
+$('#pvPrev').addEventListener('click', () => pvStep(-1));
+$('#pvNext').addEventListener('click', () => pvStep(1));
+$('#pvFull').addEventListener('click', openPvFull);
+$('#pvBody').addEventListener('click', (e) => { if (e.target && e.target.tagName === 'CANVAS') openPvFull(); });
+$('#pvfClose').addEventListener('click', () => $('#pvOverlay').classList.remove('on'));
+window.addEventListener('resize', debounce(() => { if (pvShown()) renderPv(); }, 300));
 $('#liveJump').addEventListener('click', () => { const l = $('#liveList'); l.scrollTop = l.scrollHeight; $('#liveJump').hidden = true; });
 $('#liveList').addEventListener('scroll', () => { const l = $('#liveList'); if (l.scrollHeight - l.scrollTop - l.clientHeight < 90) $('#liveJump').hidden = true; });
 $('#askClose').addEventListener('click', closeAsk);
@@ -2381,7 +2578,8 @@ $('#rNext').addEventListener('click', () => { const f = fileById(reader.fileId);
 $('#reader').addEventListener('click', (e) => { if (e.target.id === 'reader') closeReader(); });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if ($('#reader').classList.contains('on')) closeReader();
+  if ($('#pvOverlay').classList.contains('on')) $('#pvOverlay').classList.remove('on');
+  else if ($('#reader').classList.contains('on')) closeReader();
   else if (S.drawer) closeDrawer();
   else if (S.asking) closeAsk();
 });
