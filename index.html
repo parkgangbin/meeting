@@ -267,7 +267,7 @@ mark.ln{color:inherit;background:var(--marker-soft);border-radius:3px;padding:0 
 <body>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트<span class="ver">v6</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>회의 답변 어시스턴트<span class="ver">v7</span></div>
   <div class="top-status" id="topStatus" aria-live="polite"></div>
   <nav class="top-nav" aria-label="패널">
     <button class="tbtn" data-open="notes" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8.5L18 7v13.5H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11h6M9 14.5h6M9 18h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lbl">준비 노트</span></button>
@@ -579,24 +579,74 @@ function pdfText(items) {
   }
   return clean(out);
 }
+const OCR_PROMPT = '이 이미지는 회의 자료(PDF)의 한 쪽이다. 회의 중 질문에 답할 수 있도록 이 쪽의 내용을 글로 옮겨 적는다.\n' +
+  '- 보이는 글자는 빠짐없이 그대로 옮긴다. 숫자와 단위는 보이는 그대로 쓴다.\n' +
+  '- 표는 한 줄에 한 행씩, 칸은 " | "로 구분한다. 첫 줄은 머리행이다.\n' +
+  '- 차트나 그래프는 제목과 항목별 값을 "항목: 값" 형식으로 쓴다. 지도나 그림 속 글자도 옮긴다.\n' +
+  '- 설명, 요약, 추측은 쓰지 않는다. 읽을 수 없는 부분은 건너뛴다.';
+async function renderPage(pdf, pn) {
+  const page = await pdf.getPage(pn);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min(2.5, 1600 / Math.max(base.width, base.height));
+  const vp = page.getViewport({ scale });
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  const url = c.toDataURL('image/jpeg', 0.82);
+  try { page.cleanup(); } catch (e) {}
+  c.width = 0; c.height = 0;
+  return url.slice(url.indexOf(',') + 1);
+}
 async function parsePdf(file, onProg) {
   await needLib('pdf');
   try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'; } catch (e) {}
   const data = new Uint8Array(await readAB(file));
   const pdf = await pdfjsLib.getDocument({ data, isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise;
-  const out = []; let empty = 0;
+  const useAI = aiUsable();
+  const pages = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
-    const text = pdfText(tc.items);
-    if (text.replace(/\s/g, '').length < 8) empty++;
-    else pushSplit(out, 'p.' + p, text);
+    pages.push({ pn: p, text: pdfText(tc.items), ocr: '' });
     try { page.cleanup(); } catch (e) {}
-    if (onProg) onProg(p / pdf.numPages);
+    if (onProg) onProg((p / pdf.numPages) * (useAI ? 0.3 : 1), '글자 읽는 중 ' + p + '/' + pdf.numPages);
     if (p % 3 === 0) await sleep(0);
   }
+  const dense = (t) => String(t || '').replace(/\s/g, '').length;
+  const need = useAI ? pages.filter((x) => dense(x.text) < 250).slice(0, 40) : [];
+  let done = 0, ocrErr = null;
+  const one = async (x) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const img = await renderPage(pdf, x.pn);
+        const r = await callAI(OCR_PROMPT, { modelTier: 'quick', image: { mime: 'image/jpeg', data: img }, maxTokens: 4096 });
+        x.ocr = clean(r.text);
+        break;
+      } catch (e) {
+        ocrErr = e;
+        if (e && e.code === 'rate_limited' && attempt === 0) { await sleep(8000); continue; }
+        if (e && (e.code === 'bad_key' || e.code === 'aq_key')) noteSampleError(e);
+        break;
+      }
+    }
+    done++;
+    if (onProg) onProg(0.3 + 0.7 * done / need.length, 'AI가 그림 속 글자 읽는 중 ' + done + '/' + need.length);
+  };
+  for (let i = 0; i < need.length; i += 2) await Promise.all(need.slice(i, i + 2).map(one));
   try { await pdf.destroy(); } catch (e) {}
-  return { chunks: out, warn: empty ? empty + '쪽은 글자를 읽지 못했어요. 스캔 이미지일 수 있어요.' : '' };
+  const out = []; let empty = 0, ocrN = 0;
+  for (const x of pages) {
+    const hasText = dense(x.text) >= 8, hasOcr = dense(x.ocr) >= 8;
+    if (!hasText && !hasOcr) { empty++; continue; }
+    if (hasOcr) ocrN++;
+    pushSplit(out, 'p.' + x.pn + (hasOcr ? ' AI 판독' : ''), hasOcr ? x.ocr + (hasText ? '\n\n[원문 글자]\n' + x.text : '') : x.text);
+  }
+  const msgs = [];
+  if (ocrN) msgs.push('그림이 많은 ' + ocrN + '쪽은 AI가 그림 속 글자까지 읽어 넣었어요. 중요한 숫자는 원본과 한 번 대조해 보세요.');
+  if (empty) msgs.push(empty + '쪽은 글자를 읽지 못했어요.' + (!aiKey() ? ' 설정에서 API 키를 넣고 파일을 다시 올리면 AI가 그림 속 글자도 읽어요.' : ocrErr ? ' AI 판독도 실패했어요: ' + errCopy(ocrErr) : ''));
+  return { chunks: out, warn: msgs.join(' ') };
 }
 
 /* PPTX */
@@ -1022,14 +1072,14 @@ async function readSSE(res, onData, signal) {
   }
 }
 async function callGemini(model, tier, input, opts) {
-  const gen = { temperature: 0.2, maxOutputTokens: tier === 'quick' ? 1024 : 8192 };
+  const gen = { temperature: 0.2, maxOutputTokens: opts.maxTokens || (tier === 'quick' ? 1024 : 8192) };
   if (tier === 'quick' && !noThinking.has(model)) gen.thinkingConfig = /^gemini-2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
   let res;
   try {
     res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':streamGenerateContent?alt=sse', {
       method: 'POST', signal: opts.signal,
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': aiKey() },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: input }] }], generationConfig: gen }),
+      body: JSON.stringify({ contents: [{ role: 'user', parts: opts.image ? [{ inlineData: { mimeType: opts.image.mime, data: opts.image.data } }, { text: input }] : [{ text: input }] }], generationConfig: gen }),
     });
   } catch (e) { throw netErr(e); }
   if (!res.ok) {
@@ -1057,7 +1107,7 @@ async function callClaude(model, tier, input, opts) {
     res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', signal: opts.signal,
       headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model, max_tokens: tier === 'quick' ? 700 : 8000, stream: true, messages: [{ role: 'user', content: input }] }),
+      body: JSON.stringify({ model, max_tokens: opts.maxTokens || (tier === 'quick' ? 700 : 8000), stream: true, messages: [{ role: 'user', content: opts.image ? [{ type: 'image', source: { type: 'base64', media_type: opts.image.mime, data: opts.image.data } }, { type: 'text', text: input }] : input }] }),
     });
   } catch (e) { throw netErr(e); }
   if (!res.ok) throw await httpErr(res);
@@ -1086,7 +1136,7 @@ async function discoverGemini() {
   const flash = rank(ok.filter((n) => /flash/.test(n) && !/lite/.test(n)));
   return { quick: lite.concat(flash).slice(0, 4), deep: flash.concat(lite).slice(0, 4), all: rank(ok.slice()).slice(0, 30), t: now() };
 }
-async function callAI(input, opts) {
+async function callAIOnce(input, opts) {
   opts = opts || {};
   const tier = opts.modelTier === 'quick' ? 'quick' : 'deep';
   const prov = aiProv();
@@ -1130,6 +1180,17 @@ async function callAI(input, opts) {
     }
   }
   throw last || { code: 'bad_model', message: 'no model' };
+}
+async function callAI(input, opts) {
+  opts = opts || {};
+  try { return await callAIOnce(input, opts); }
+  catch (e) {
+    if (!opts._alt && e && (e.code === 'rate_limited' || e.code === 'upstream_error' || e.code === 'bad_model')) {
+      try { return await callAIOnce(input, Object.assign({}, opts, { modelTier: opts.modelTier === 'quick' ? 'default' : 'quick', _alt: true })); }
+      catch (e2) { throw e; }
+    }
+    throw e;
+  }
 }
 function errCopy(e) {
   const c = e && e.code;
@@ -1323,6 +1384,7 @@ function answerPrompt(ctx) {
       '2. 말머리는 음성 인식이라 오타가 있을 수 있다. 자료에 나오는 말로 바로잡아 이해한다.\n' +
       '3. 답변 줄에는 말머리를 다시 쓰지 말고, 말머리 바로 뒤에 붙여 읽으면 자연스러운 존댓말 한 문장이 되는 뒷부분만 쓴다. 핵심 숫자를 먼저, 60자 안팎.\n' +
       '   예) 말머리 "A점 3월 매출은" → 답변 "120억 원으로, 전월보다 5% 늘었습니다."\n' +
+      '   말머리가 "~말씀드리겠습니다"처럼 주제를 알리는 문장이면, 답변 줄에는 바로 이어서 말할 다음 문장을 쓴다. 예) "A점 인구 말씀드리겠습니다" → "A점 상권 인구는 50만 명입니다."\n' +
       '4. 숫자, 단위, 고유명사는 자료 표기 그대로 쓴다. 자료의 숫자로 계산했다면 그 값 뒤에 "(계산)"을 붙인다.\n' +
       '5. 근거 줄에는 실제로 참고한 [자료] 번호만 쓴다.\n\n' +
       '출력은 아래 세 줄만 쓴다. 다른 말은 쓰지 않는다.\n' +
@@ -1685,7 +1747,7 @@ function looksLikeQuestion(s) {
   if (Q_END.test(t)) return t.length >= 7 || !/죠\s*$/.test(t);
   return Q_WORD.test(t) && t.length >= 8;
 }
-const LEAD_END = /(은|는|이|가|으로는|로는|에서는|에는|기준으로|말씀드리면|보면|보시면|대해서는|관련해서)$/;
+const LEAD_END = /(은|는|이|가|으로는|로는|에서는|에는|기준으로|말씀드리면|말씀드리자면|보면|보시면|대해서는|관련해서|말씀드리겠습니다|말씀드릴게요|말씀드릴께요|보고드리겠습니다|설명드리겠습니다|공유드리겠습니다)$/;
 function materialHits(t) {
   if (!S.index || !S.index.N) return 0;
   const seen = new Set(); let n = 0;
@@ -1842,7 +1904,7 @@ async function addFiles(list) {
     refresh();
     try {
       let lastPaint = 0;
-      const res = await parseFile(file, kind, (p) => { f.progress = p; if (now() - lastPaint > 250) { lastPaint = now(); renderMaterials(); } });
+      const res = await parseFile(file, kind, (p, label) => { f.progress = p; f.progressText = label || ''; if (now() - lastPaint > 250) { lastPaint = now(); renderMaterials(); } });
       f.chunks = (res.chunks || []).filter((c) => c.text && c.text.replace(/\s/g, '').length).map((c, i) => ({ id: f.id + ':' + i, loc: c.loc, text: c.text }));
       f.warn = res.warn || '';
       if (!f.chunks.length) throw new Error('empty');
@@ -1922,7 +1984,7 @@ function renderTop() {
   $('#topStatus').innerHTML = parts.join('');
 }
 function fileStatus(f) {
-  if (f.status === 'parsing') return { text: '읽는 중 ' + Math.round((f.progress || 0) * 100) + '%', busy: true };
+  if (f.status === 'parsing') return { text: f.progressText || ('읽는 중 ' + Math.round((f.progress || 0) * 100) + '%'), busy: true };
   if (f.status === 'error') return { text: '읽기 실패', bad: true };
   const st = f.study || {};
   if (st.status === 'queued') return { text: '공부 대기', busy: true };
@@ -1957,10 +2019,11 @@ function renderMaterials() {
 function renderCards() {
   const f = fileById(S.activeFile), cards = $('#cards');
   if (!f) { cards.innerHTML = ''; return; }
-  if (f.status === 'parsing') { cards.innerHTML = '<div class="mat-msg">읽는 중이에요. ' + Math.round((f.progress || 0) * 100) + '%</div>'; return; }
+  if (f.status === 'parsing') { cards.innerHTML = '<div class="mat-msg">' + escText(f.progressText || ('읽는 중이에요. ' + Math.round((f.progress || 0) * 100) + '%')) + '</div>'; return; }
   if (f.status === 'error') { cards.innerHTML = '<div class="mat-msg">' + escText(f.error || '파일을 읽지 못했어요.') + '</div>'; return; }
   let h = '';
   if (f.warn) h += '<div class="page note"><span class="loc">알림</span><span class="tx">' + escText(f.warn) + '</span></div>';
+  if (f.study && f.study.status === 'error') h += '<div class="page note"><span class="loc">AI 공부 실패</span><span class="tx">' + escText(f.study.error || '') + '</span><button class="linkbtn" data-act="restudy" data-file="' + f.id + '">다시 공부하기</button></div>';
   h += f.chunks.map((c) => '<button class="page' + (S.hits.has(c.id) ? ' hit' : '') + '" data-chunk="' + escAttr(c.id) + '"><span class="loc">' + escText(c.loc) + '</span><span class="tx">' + escText(c.text.slice(0, 600)) + '</span></button>').join('');
   cards.innerHTML = h;
 }
